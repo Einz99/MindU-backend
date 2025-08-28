@@ -7,7 +7,7 @@ exports.getAllResources = async () => {
 };
 
 exports.getAllWellness = async () => {
-  const [rows] = await db.query("SELECT * FROM resources WHERE isResource = 0 ORDER BY created_at DESC");
+  const [rows] = await db.query("SELECT * FROM resources WHERE isResource = 0 ORDER BY created_at ASC");
   return rows;
 };
 
@@ -17,12 +17,12 @@ exports.getResourceById = async (id) => {
 };
 
 exports.createResource = async (resourceData) => {
-  const { isResource, title, category, resourceType, description, filepath, banner } = resourceData;
+  const { isResource, title, category, resourceType, description, filepath, banner, status, posted_at } = resourceData;
   
   const sql = `
     INSERT INTO resources 
-      (isResource, title, category, resourceType, description, filepath, banner)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+      (isResource, title, category, resourceType, description, filepath, banner, status, posted_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
 
   const [result] = await db.query(sql, [
@@ -32,7 +32,9 @@ exports.createResource = async (resourceData) => {
     resourceType || null,
     description,
     filepath,
-    banner || ""
+    banner || "",
+    status,
+    posted_at,
   ]);
 
   return {
@@ -46,11 +48,13 @@ exports.createResource = async (resourceData) => {
     banner: banner || "",
     created_at: new Date(),
     modified_at: new Date(),
+    status,
+    posted_at,
   };
 };
 
 exports.updateResource = async (id, resourceData) => {
-  const { isResource, title, category, resourceType, description, filepath, banner } = resourceData;
+  const { isResource, title, category, resourceType, description, filepath, banner, status, posted_at } = resourceData;
   
   const sql = `
     UPDATE resources 
@@ -62,6 +66,8 @@ exports.updateResource = async (id, resourceData) => {
       description = COALESCE(?, description),
       filepath = COALESCE(?, filepath),
       banner = COALESCE(?, banner),
+      status = COALESCE(?, status),
+      posted_at = COALESCE(?, posted_at),
       modified_at = NOW()
     WHERE ID = ?
   `;
@@ -74,6 +80,8 @@ exports.updateResource = async (id, resourceData) => {
     description,
     filepath,
     banner,
+    status,
+    posted_at,
     id,
   ]);
   
@@ -86,8 +94,9 @@ exports.deleteResources = async (ids) => {
     throw new Error("Invalid input: IDs must be a non-empty array.");
   }
 
-  const sql = `DELETE FROM resources WHERE ID IN (?)`;
-  const [result] = await db.query(sql, [ids]);
-
+  const placeholders = ids.map(() => '?').join(',');
+  const sql = `DELETE FROM resources WHERE ID IN (${placeholders})`;
+  
+  const [result] = await db.query(sql, ids);
   return result.affectedRows; // Returns number of deleted rows
 };

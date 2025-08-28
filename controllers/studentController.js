@@ -1,19 +1,7 @@
-const multer = require('multer');
-const path = require('path');
+// File: controllers/studentController.js
 const studentService = require('../services/studentService');
-
-// Configure multer for file uploads
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, 'resources/');
-  },
-  filename: (req, file, cb) => {
-    cb(null, `${Date.now()}-${file.originalname}`);
-  }
-});
-
-
-const upload = multer({ storage });
+const db = require('../db');
+const nodemailer = require("nodemailer");
 
 exports.getAllStudents = async (req, res) => {
   try {
@@ -41,7 +29,46 @@ exports.getStudentById = async (req, res) => {
 
 exports.createStudent = async (req, res) => {
   try {
+    const {
+      firstName,
+      lastName,
+      section,
+      adviser,
+      adding_name,
+      adding_position
+    } = req.body;
+
     const newStudent = await studentService.createStudent(req.body);
+
+    // Prepare the activity message
+    const message = `${adding_position}: ${adding_name} added a student ${firstName} ${lastName}, section: ${section} advisory class of ${adviser}`;
+
+    // Insert message into ActivityLog
+    await db.query(
+      `INSERT INTO ActivityLog (message) VALUES (?)`,
+      [message]
+    );
+
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
+      },
+    });
+
+    await transporter.sendMail({
+      from: `"MindU Support" <${process.env.EMAIL_USER}>`,
+      to: newStudent.email,
+      subject: 'Welcome to MindU',
+      html: `<p>Welcome ${newStudent.firstName} ${newStudent.lastName},</p>
+             <p>Your account has been created successfully.</p>
+             <p>Your temporary password is ${newStudent.randomPassword}. Please change it immediately.</p>
+             <p>Best regards,</p>
+             <p>The MindU Team</p>
+             <p>Note: This is an automated message, please do not reply.</p>`,
+    });
+
     return res.status(201).json({
       message: "Student created successfully",
       student: newStudent,
@@ -65,6 +92,24 @@ exports.updateStudent = async (req, res) => {
     if (!updated) {
       return res.status(404).json({ message: "Student not found" });
     }
+
+    const {
+      firstName,
+      lastName,
+      section,
+      adviser,
+      adding_name,
+      adding_position
+    } = req.body;
+
+    if (adding_name && adding_position) {
+      const message = `${adding_position}: ${adding_name} updated a student ${firstName} ${lastName}, section: ${section} advisory class of ${adviser}`;
+      await db.query(
+        `INSERT INTO ActivityLog (message) VALUES (?)`,
+        [message]
+      );
+    }
+
     return res.status(200).json({ message: "Student updated successfully" });
   } catch (error) {
     console.error("Error updating student:", error);
@@ -76,33 +121,33 @@ exports.updateStudent = async (req, res) => {
 exports.deleteStudent = async (req, res) => {
   try {
     const { id } = req.params;
-    const deleted = await studentService.deleteStudent(id);
-    if (!deleted) {
+    const staffName = req.query.staffName || "Unknown";
+    const staffPosition = req.query.staffPosition || "Unknown";
+
+    // Get the student details before deletion
+    const [rows] = await db.query('SELECT firstName, lastName, section, adviser FROM students WHERE id = ?', [id]);
+    if (rows.length === 0) {
       return res.status(404).json({ message: "Student not found" });
     }
+
+    const student = rows[0];
+
+    // Delete the student
+    const [deleteResult] = await db.query('DELETE FROM students WHERE id = ?', [id]);
+    if (deleteResult.affectedRows === 0) {
+      return res.status(404).json({ message: "Student not found" });
+    }
+
+    // Create the log message
+    const message = `${staffPosition}: ${staffName} removed a student ${student.firstName} ${student.lastName}, section: ${student.section} advisory class of ${student.adviser}`;
+
+    // Insert into ActivityLog
+    await db.query('INSERT INTO ActivityLog (message) VALUES (?)', [message]);
+
     return res.status(200).json({ message: "Student deleted successfully" });
+
   } catch (error) {
     console.error("Error deleting student:", error);
-    return res.status(500).json({ message: "Server error", error: error.message });
-  }
-};
-
-exports.deleteMultipleStudents = async (req, res) => {
-  try {
-    const { ids } = req.body; // Expecting an array of student IDs
-
-    if (!Array.isArray(ids) || ids.length === 0) {
-      return res.status(400).json({ message: "Invalid request: Provide an array of student IDs." });
-    }
-
-    const deletedCount = await studentService.deleteMultipleStudents(ids);
-    if (deletedCount === 0) {
-      return res.status(404).json({ message: "No students found to delete." });
-    }
-
-    return res.status(200).json({ message: `${deletedCount} students deleted successfully.` });
-  } catch (error) {
-    console.error("Error deleting multiple students:", error);
     return res.status(500).json({ message: "Server error", error: error.message });
   }
 };
@@ -117,7 +162,7 @@ exports.bulkInsertStudents = async (req, res) => {
 
     const result = await studentService.bulkInsertStudents(students);
 
-    return res.status(201).json({
+    return res.status(200).json({
       message: `${result.insertedCount} students inserted successfully.`,
       skipped: result.skippedCount > 0 
         ? `${result.skippedCount} students were skipped because they already exist.` 

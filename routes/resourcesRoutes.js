@@ -39,5 +39,6 @@ router.get("/", resourcesController.getResources);
 router.get("/wellness", resourcesController.getWellness);
 router.get("/:id", resourcesController.getResourceById);
 router.post("/delete-multiple", resourcesController.deleteResources);
+router.delete("/:id", resourcesController.deleteResource);
 
 module.exports = router;

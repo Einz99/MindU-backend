@@ -1,5 +1,6 @@
 const db = require('../db');
 const crypto = require("crypto");
+const nodemailer = require('nodemailer');
 // const bcrypt = require("bcrypt");
 
 exports.getAllStudents = async () => {
@@ -25,14 +26,26 @@ exports.createStudent = async (studentData) => {
 
   // Generate a random 10-character password
   const randomPassword = crypto.randomBytes(5).toString("hex"); // 10 characters
+  //   const hashedPassword = await bcrypt.hash(randomPassword, 10); // 10 rounds of salt
+  const passwordLength = randomPassword.length;
 
   const sql = `
     INSERT INTO students 
       (password, lastName, firstName, adviser, age, gender, email, section)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `;
+
+  /*
+  const sql = `
+    INSERT INTO students 
+      (password, lastName, firstName, adviser, age, gender, email, section, passwordLength)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `;
+  */
+
   const [result] = await db.query(sql, [
     randomPassword, // Store generated password
+    //hashedPassword,
     lastName,
     firstName,
     adviser,
@@ -40,6 +53,7 @@ exports.createStudent = async (studentData) => {
     gender,
     email,
     section,
+    // passwordLength,
   ]);
 
   return {
@@ -51,105 +65,59 @@ exports.createStudent = async (studentData) => {
     gender,
     email,
     section,
-    generatedPassword: randomPassword, // Return generated password for admin reference
+    randomPassword,
     firstLogin: true,
     created_at: new Date(),
     modified_at: new Date(),
   };
 };
 
-
-// change if encryption is required delete the other createStudents
-// exports.createStudent = async (studentData) => {
-//   const {
-//     username,
-//     lastName,
-//     firstName,
-//     adviser,
-//     age,
-//     gender,
-//     email,
-//   } = studentData;
-
-//   // Generate a random 10-character password
-//   const randomPassword = crypto.randomBytes(5).toString("hex"); // 10 characters
-
-//   // Hash the password before storing
-//   const hashedPassword = await bcrypt.hash(randomPassword, 10); // 10 rounds of salt
-
-//   const sql = `
-//     INSERT INTO students 
-//       (username, password, lastName, firstName, adviser, age, gender, email)
-//     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-//   `;
-//   const [result] = await db.query(sql, [
-//     username,
-//     hashedPassword, // Store hashed password instead of plain text
-//     lastName,
-//     firstName,
-//     adviser,
-//     age,
-//     gender,
-//     email,
-//   ]);
-
-//   return {
-//     id: result.insertId,
-//     username,
-//     lastName,
-//     firstName,
-//     adviser,
-//     age,
-//     gender,
-//     email,
-//     generatedPassword: randomPassword, // Provide the generated password to be sent securely
-//     firstLogin: true,
-//     created_at: new Date(),
-//     modified_at: new Date(),
-//   };
-// };
-
-
 exports.updateStudent = async (id, studentData) => {
   const {
-    username,    // updated username if needed
     password,
     lastName,
     firstName,
     adviser,
-    age,
-    gender,
+    section,
     email,
   } = studentData;
+
+  let passwordLength = null;
+  let hashedPassword = null;
+
+  if (password) {
+    //const bcrypt = require('bcrypt'); // Ensure bcrypt is imported
+    //hashedPassword = await bcrypt.hash(password, 10);
+    passwordLength = password.length;
+  }
 
   const sql = `
     UPDATE students 
     SET 
-      username = COALESCE(?, username),
       password = COALESCE(?, password),
       lastName = COALESCE(?, lastName),
       firstName = COALESCE(?, firstName),
       adviser = COALESCE(?, adviser),
-      age = COALESCE(?, age),
-      gender = COALESCE(?, gender),
       email = COALESCE(?, email),
+      section = COALESCE(?, section),
       modified_at = NOW(),
-      firstLogin = false
+      firstLogin = false,
+      passwordLength = COALESCE(?, passwordLength)
     WHERE id = ?
   `;
+
   const [result] = await db.query(sql, [
-    username,
-    password,
+    password, //hashedPassword
     lastName,
     firstName,
     adviser,
-    age,
-    gender,
     email,
+    section,
+    passwordLength,
     id,
   ]);
 
-  return result.affectedRows; // returns 1 if updated, 0 if not found
+  return result.affectedRows;
 };
 
 exports.deleteStudent = async (id) => {
@@ -169,44 +137,91 @@ exports.bulkInsertStudents = async (students) => {
     throw new Error("Invalid student data.");
   }
 
-  // Ensure valid format
-  const formattedStudents = students.map(student => ({
-    firstName: student.firstName || null,
-    lastName: student.lastName || null,
-    section: student.section || null,
-    adviser: student.adviser || null,
-    email: student.email || null,
-    password: crypto.randomBytes(5).toString("hex"), // Generate random password
-  }));
+  // 1. Get all advisers with their section
+  const [advisers] = await db.query(
+    "SELECT name, section FROM staffs WHERE position = 'Adviser' AND section IS NOT NULL"
+  );
+  const sectionToAdviserMap = new Map(advisers.map(a => [a.section, a.name]));
 
-  // Extract unique emails from request
-  const emails = formattedStudents.map(s => s.email).filter(email => email); // Ignore empty emails
+  // 2. Prepare students with adviser auto-assigned and passwords
+  const formattedStudents = students.map(student => {
+    const password = crypto.randomBytes(5).toString("hex");
+    const adviserName = sectionToAdviserMap.get(student.section) || null;
+
+    return {
+      firstName: student.firstName || null,
+      lastName: student.lastName || null,
+      section: student.section || null,
+      adviser: adviserName,
+      email: student.email || null,
+      password,
+      randomPassword: password, // Keep for email use
+    };
+  });
+
+  const emails = formattedStudents.map(s => s.email).filter(email => email);
   if (emails.length === 0) throw new Error("No valid emails provided.");
 
-  // Check if emails already exist
+  // 3. Check for existing emails
   const [existingStudents] = await db.query(
     "SELECT email FROM students WHERE email IN (?)",
     [emails]
   );
   const existingEmails = new Set(existingStudents.map(s => s.email));
 
-  // Filter out existing students by email
-  const validStudents = formattedStudents.filter(student => !existingEmails.has(student.email));
-
-  if (validStudents.length === 0) {
-    return { insertedCount: 0, skippedCount: students.length, message: "All students already exist." };
+  // 4. Filter only new students
+  const newStudents = formattedStudents.filter(s => !existingEmails.has(s.email));
+  if (newStudents.length === 0) {
+    return {
+      insertedCount: 0,
+      skippedCount: students.length,
+      message: "All students already exist.",
+    };
   }
 
-  // Insert valid students
+  // 5. Bulk insert
   const sql = `
     INSERT INTO students (firstName, lastName, section, adviser, email, password)
     VALUES ?
   `;
-  const values = validStudents.map(s => [s.firstName, s.lastName, s.section, s.adviser, s.email, s.password]);
+  const values = newStudents.map(s => [
+    s.firstName,
+    s.lastName,
+    s.section,
+    s.adviser,
+    s.email,
+    s.password,
+  ]);
   const [result] = await db.query(sql, [values]);
+
+  // 6. Send email to each new student
+  const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASS,
+    },
+  });
+
+  for (const student of newStudents) {
+    await transporter.sendMail({
+      from: `"MindU Support" <${process.env.EMAIL_USER}>`,
+      to: student.email,
+      subject: 'Welcome to MindU',
+      html: `
+        <p>Welcome <strong>${student.firstName} ${student.lastName}</strong>,</p>
+        <p>Your account has been <strong>created successfully</strong>.</p>
+        <p><strong>Temporary Password:</strong> <code>${student.randomPassword}</code></p>
+        <p>Please change your password as soon as possible after logging in.</p>
+        <hr/>
+        <p><em>This is an automated message. Please do not reply.</em></p>
+        <p>— The MindU Team</p>
+      `,
+    });
+  }
 
   return {
     insertedCount: result.affectedRows,
-    skippedCount: students.length - validStudents.length,
+    skippedCount: students.length - newStudents.length,
   };
 };

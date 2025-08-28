@@ -13,5 +13,11 @@ router.post("/forgot-password", authController.forgotPassword);
 router.get("/announcements", announceController.getAnnouncements);
 router.get("/resources", getResources.getResources);
 router.post("/refresh", authController.refreshToken);
+router.put("/update-email", authController.updateEmail);
+router.put("/update-profile-pic", authController.updateProfilePic);
+
+router.post("/send-code", authController.sendCode);
+router.post("/verify-code", authController.verifyCode);
+
 
 module.exports = router;

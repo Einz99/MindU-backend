@@ -3,7 +3,7 @@
 const db = require("../db");
 
 exports.getAllAnnouncements = async () => {
-  const [rows] = await db.query("SELECT * FROM announcements ORDER BY created_at DESC LIMIT 10");
+  const [rows] = await db.query("SELECT * FROM announcements ORDER BY created_at");
   return rows;
 };
 
@@ -13,36 +13,38 @@ exports.getAnnouncementById = async (id) => {
 };
 
 exports.createAnnouncement = async (announcementData) => {
-  const { title, category, announcementContent } = announcementData;
+  const { title, category, announcementContent, end_date } = announcementData;
   
   const sql = `
-    INSERT INTO announcements (title, category, announcementContent)
-    VALUES (?, ?, ?)
+    INSERT INTO announcements (title, category, announcementContent, end_date)
+    VALUES (?, ?, ?, ?)
   `;
-  const [result] = await db.query(sql, [title, category, announcementContent]);
+  const [result] = await db.query(sql, [title, category, announcementContent, end_date]);
 
   return {
     ID: result.insertId,
     title,
     category,
     announcementContent,
+    end_date,
     created_at: new Date(),
     modified_at: new Date(),
   };
 };
 
 exports.updateAnnouncement = async (id, announcementData) => {
-  const { title, category, announcementContent } = announcementData;
+  const { title, category, announcementContent, end_date } = announcementData;
   const sql = `
     UPDATE announcements 
     SET 
       title = COALESCE(?, title),
       category = COALESCE(?, category),
       announcementContent = COALESCE(?, announcementContent),
+      end_date = COALESCE(?, end_date),
       modified_at = NOW()
     WHERE ID = ?
   `;
-  const [result] = await db.query(sql, [title, category, announcementContent, id]);
+  const [result] = await db.query(sql, [title, category, announcementContent, end_date, id]);
   return result.affectedRows;
 };
 

@@ -5,6 +5,8 @@ const bodyParser = require("body-parser");
 const path = require("path");
 const http = require("http");
 const { Server } = require("socket.io");
+require('./jobs');
+const os = require("os");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -22,9 +24,35 @@ io.on("connection", (socket) => {
 });
 
 // Middleware
-app.use(cors());
+const allowedOrigins = [
+  'http://192.168.1.11:3001',
+  'http://localhost:3001',
+  'http://localhost:3000',        // ← ADD THIS IF NEEDED
+  'http://192.168.1.11:3000'      // ← OR THIS
+];
+
+app.use(cors({
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  credentials: true,
+}));
+
+app.options('*', cors());
+
+app.use((req, res, next) => {
+  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+  res.setHeader('Cross-Origin-Embedder-Policy', 'require-corp');
+  next();
+});
 app.use(bodyParser.json());
 app.use("/resources", express.static(path.join(__dirname, "resources")));
+app.use('/public', express.static(path.join(__dirname, 'public')));
 app.set("io", io);
 
 // Import Routes
@@ -53,6 +81,12 @@ app.use("/api/staffs", staffRoutes);
 
 const resourcesRoutes = require("./routes/resourcesRoutes");
 app.use("/api/resources", resourcesRoutes);
+
+const moodRoutes = require("./routes/moodRoutes");
+app.use("/api/moods", moodRoutes)
+
+const chatbotRoutes = require('./routes/chatbotRoutes');
+app.use('/api/chatbot', chatbotRoutes);
 
 const announcementRoutes = require("./routes/announcementRoutes");
 app.use(
@@ -85,7 +119,21 @@ app.use(
   backlogRoutes
 );
 
+const getLocalIP = () => {
+  const interfaces = os.networkInterfaces();
+  for (const name in interfaces) {
+    for (const iface of interfaces[name]) {
+      if (iface.family === 'IPv4' && !iface.internal) {
+        return iface.address;
+      }
+    }
+  }
+  return 'localhost';
+};
+
+
 // Start server
+
 server.listen(PORT, () => {
-  console.log(`✅ Server running on http://localhost:${PORT}`);
+  console.log(`✅ Server running on http://${getLocalIP()}:${PORT}`);
 });

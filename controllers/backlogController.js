@@ -1,6 +1,8 @@
 // controllers/backlogController.js
 const backlogService = require("../services/backlogService");
 const db = require("../db");
+const { format, addDays } = require("date-fns");
+const nodemailer = require('nodemailer');
 
 /**
  * Create a new backlog record.
@@ -15,45 +17,89 @@ const db = require("../db");
  *    - status: "Scheduled"
  *    - name: provided in the request (from guidance)
  */
-async function createBacklog(req, res) {
+exports.createBacklog = async (req, res) => {
   try {
     const data = req.body;
-    
+
     if (data.student_id) {
       // Student creation
       data.title = "Request Meeting";
       data.sched_date = null;
       data.status = "Pending";
+
       // Lookup student's firstName and lastName from the students table.
       const [rows] = await db.query(
-        "SELECT firstName, lastName FROM students WHERE id = ?",
+        "SELECT firstName, lastName, email FROM students WHERE id = ?",
         [data.student_id]
       );
+
+
       if (rows.length > 0) {
         const student = rows[0];
         data.name = `${student.firstName} ${student.lastName}`;
+
+        const transporter = nodemailer.createTransport({
+            service: 'gmail',
+            auth: {
+              user: process.env.EMAIL_USER,
+              pass: process.env.EMAIL_PASS,
+            },
+          });
+      
+        await transporter.sendMail({
+          from: `"The MIND-U Team" <${process.env.EMAIL_USER}>`,
+          to: student.email,
+          subject: 'Appointment Request Received – MIND-U',
+          html: `<p>Dear ${data.name},</p>
+                 <p>Thank you for requesting an appointment through the MIND-U Student Wellness Management System.</p><br>
+                 <p>Your appointment request will be reviewed by our team. Once it is approved and scheduled, you will receive a notification with the appointment details.</p><br>
+                 <p>Note: This is an automated message —— <strong>please do not reply<strong>.</p><br>
+                 <p>Thank you for using MIND-U.<p>
+                 <p>Best regards,</p>
+                 <p><strong>The Mind-U Team<strong></p>
+                 `,
+        });
       } else {
         data.name = "Unknown Student";
       }
+
+      
     } else {
       // Admin creation
-      data.title = "Guidance Related Events";
       if (!data.sched_date) {
         return res.status(400).json({ error: "Admin-created event must have sched_date" });
       }
+
       if (!data.name) {
         return res.status(400).json({ error: "Admin-created event must include a name" });
       }
+
       data.status = "Scheduled";
+
+      // 📝 Insert Activity Log
+      const formatDate = (dateStr) =>
+        format(new Date(dateStr), "EEEE - MM/dd/yyyy");
+
+      const message = `${data.staff_position}: ${data.staff_name} created a new guidance event named ${data.name} scheduled ${formatDate(data.sched_date)}`;
+      await db.query("INSERT INTO ActivityLog (message) VALUES (?)", [message]);
     }
-    
+
     const createdRecord = await backlogService.createBacklog(data);
-    return res.status(201).json(createdRecord);
+
+    // Emit update
+    const io = req.io;
+    if (io) {
+      const updatedBacklogs = await backlogService.getBacklogs({});
+      io.emit("updateBacklogs", updatedBacklogs);
+    }
+
+    return res.status(201).json({ success: true, data: createdRecord });
+
   } catch (error) {
     console.error("Error in createBacklog:", error);
     return res.status(500).json({ error: error.message });
   }
-}
+};
 
 /**
  * Update an existing backlog record.
@@ -63,43 +109,129 @@ async function createBacklog(req, res) {
  * - "Cancel": Sets status to "Cancelled" and records completed_at.
  * - "Mark Complete": Sets status to "Completed" and records completed_at.
  */
-async function updateBacklog(req, res) {
+exports.updateBacklog = async (req, res) => {
   try {
     const id = req.params.id;
     let updateData = req.body;
 
-    if (updateData.action === "Edit" && updateData.sched_date) {
+    let message = "";
+    const formatDate = (dateStr) =>
+      format(new Date(dateStr), "EEEE - MM/dd/yyyy");
+
+    const {
+      action,
+      staff_name,
+      staff_position,
+      student_id,
+      name,
+      from_pending,
+      from_cancel,
+      original_date,
+      sched_date,
+    } = updateData;
+
+    if (action === "Edit" && sched_date) {
       updateData.status = "Scheduled";
-    } else if (updateData.action === "Cancel") {
+      if (student_id && !from_cancel) {
+        message = `${staff_position}: ${staff_name} rescheduled a scheduled request from ${name} from ${formatDate(original_date)} to ${formatDate(sched_date)}`;
+      } else if (student_id && from_cancel) {
+        message = `${staff_position}: ${staff_name} rescheduled a cancelled meeting request from ${name} to ${formatDate(sched_date)}`;
+      }
+    } else if (action === "Schedule" && sched_date && from_pending) {
+      updateData.status = "Scheduled";
+      message = `${staff_position}: ${staff_name} scheduled a pending meeting request from ${name} in ${formatDate(sched_date)}`;
+    } else if (action === "Cancel") {
       updateData.completed_at = new Date();
       updateData.status = "Cancelled";
-    } else if (updateData.action === "Mark Complete") {
+      message = `${staff_position}: ${staff_name} cancelled the meeting request from ${name} dated ${formatDate(original_date)}`;
+    } else if (action === "Mark Complete") {
       updateData.completed_at = new Date();
       updateData.status = "Completed";
-    } else if (updateData.action === "Trash") {
+      message = `${staff_position}: ${staff_name} marked complete the meeting request from ${name} dated ${formatDate(original_date)}`;
+    } else if (action === "Trash") {
       updateData.status = "Trash";
-    } else if (updateData.action === "Restore") {
-      updateData.status = "Cancelled"; // Restore back to "Cancelled" state
-    } else if (updateData.action === "Permanent") {
-      updateData.status = "Permanent"; // Instead of deleting, mark as "Permanent"
+      message = `${staff_position}: ${staff_name} trashed the cancelled meeting request from ${name}`;
+    } else if (action === "Restore") {
+      updateData.status = "Cancelled";
+      message = `${staff_position}: ${staff_name} restored the meeting request from ${name}`;
+    } else if (action === "Delete") {
+      const deleteQuery = "DELETE FROM backlogs WHERE id = ?";
+      await db.query(deleteQuery, [id]);
+
+      message = `${staff_position}: ${staff_name} permanently deleted the meeting request from ${name}`;
+      if (!student_id) {
+        message = `${staff_position}: ${staff_name} permanently deleted the guidance event named ${name}`;
+      }
+
+      await db.query("INSERT INTO ActivityLog (message) VALUES (?)", [message]);
+      return res.status(200).json({ success: true, message: "Backlog record deleted successfully." });
+    }
+
+    // Replace message if not related to student
+    if (!student_id && message) {
+      message = message.replace(/meeting request from .*?(?=( |$))/, `guidance event named ${name}`);
     }
 
     const updatedRecord = await backlogService.updateBacklog(id, updateData);
-    return res.json(updatedRecord);
+  
+    if (message) {
+      await db.query("INSERT INTO ActivityLog (message) VALUES (?)", [message]);
+    }
+
+    // Emit update
+    const io = req.io;
+    if (io) {
+      const updatedBacklogs = await backlogService.getBacklogs({});
+      io.emit("updateBacklogs", updatedBacklogs);
+    }
+
+    if (student_id && updateData.status === "Scheduled" && sched_date) {
+      const [studentResult] = await db.query("SELECT * FROM students WHERE id = ?", [student_id]);
+      const student = studentResult[0];
+        
+      if (student) {
+        const formattedDate = format(new Date(sched_date), "MMMM dd, yyyy");
+        const formattedTime = format(new Date(sched_date), "hh:mm a");
+      
+        const transporter = nodemailer.createTransport({
+          service: 'gmail',
+          auth: {
+            user: process.env.EMAIL_USER,
+            pass: process.env.EMAIL_PASS,
+          },
+        });
+      
+        await transporter.sendMail({
+          from: `"The MIND-U Team" <${process.env.EMAIL_USER}>`,
+          to: student.email,
+          subject: 'Appointment Scheduled – MIND-U Confirmation',
+          html: `
+            <p>Dear ${student.firstName} ${student.lastName},</p>
+            <p>We’re pleased to inform you that your appointment through the <strong>MIND-U Student Wellness Management System</strong> has been <strong>successfully scheduled</strong>.</p>
+            <p><strong>Appointment Details:</strong><br>
+            Date: ${formattedDate}<br>
+            Time: ${formattedTime}</p>
+            <p>Please be reminded to arrive <strong>on time</strong> for your scheduled appointment. If you are unable to attend, kindly inform the Guidance Office in advance.</p>
+            <p><strong>This is an automated message — do not reply to this email.</strong></p>
+            <p>Thank you for taking a step toward your well-being.</p>
+            <p>Best regards,<br><strong>The MIND-U Team</strong></p>
+          `,
+        });
+      }
+    }
+
+    return res.json({ success: true, data: updatedRecord });
   } catch (error) {
     console.error("Error in updateBacklog:", error);
     return res.status(500).json({ error: error.message });
   }
 }
 
-
-
-
 /**
  * Retrieve backlog records with optional filtering.
  * The front end can filter records by status (e.g., to show pending requests vs. scheduled events).
  */
-async function getBacklogs(req, res) {
+exports.getBacklogs = async (req, res) => {
   try {
     const filter = req.query;
     const records = await backlogService.getBacklogs(filter);
@@ -110,8 +242,58 @@ async function getBacklogs(req, res) {
   }
 }
 
-module.exports = {
-  createBacklog,
-  updateBacklog,
-  getBacklogs,
+/**
+ * Delete a backlog record by its ID.
+ * Only an admin is allowed to delete.
+ */
+exports.deleteBacklog = async (req, res) => {
+  try {
+    const id = req.params.id;
+
+    // Check if the backlog exists
+    const [existingBacklog] = await db.query("SELECT * FROM backlogs WHERE id = ?", [id]);
+    if (existingBacklog.length === 0) {
+      return res.status(404).json({ error: "Backlog not found" });
+    }
+
+    // Perform the delete operation
+    await backlogService.deleteBacklog(id);
+    const io = req.io;
+    if (io) {
+      const updatedBacklogs = await backlogService.getBacklogs({});
+      io.emit("updateBacklogs", updatedBacklogs);
+    }
+
+    return res.status(200).json({ message: "Backlog deleted successfully" });
+  } catch (error) {
+    console.error("Error in deleteBacklog:", error);
+    return res.status(500).json({ error: error.message });
+  }
+}
+
+exports.createRequest = async (req, res) => {
+  try {
+    const { name, sched_date, staff_name, staff_position } = req.body;
+    const file = req.file;
+
+    if (!name || !sched_date || !file) {
+      return res.status(400).json({ error: "Missing required fields or file" });
+    }
+
+    const relativePath = `request/${file.filename}`;
+
+    const [result] = await db.query(
+      `INSERT INTO backlogs (title, name, sched_date, status, proposal)
+       VALUES (?, ?, ?, ?, ?)`,
+      ["Guidance Related Events", name, sched_date, "Pending", relativePath]
+    );
+
+    const message = `${staff_position}: ${staff_name} proposed a new guidance event named ${name} scheduled ${format(new Date(sched_date), "EEEE - MM/dd/yyyy")}`;
+    await db.query("INSERT INTO ActivityLog (message) VALUES (?)", [message]);
+
+    res.status(201).json({ success: true, data: { id: result.insertId, name, sched_date, proposal: relativePath } });
+  } catch (err) {
+    console.error("Error creating backlog:", err);
+    res.status(500).json({ error: err.message });
+  }
 };

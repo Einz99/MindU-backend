@@ -1,19 +1,20 @@
 // services/backlogService.js
 const db = require("../db");
+const fs = require("fs");
+const path = require("path");
 
 /**
  * Create a new backlog record.
  * @param {Object} data - The backlog data.
  * @returns {Promise<Object>} The created backlog record.
  */
-async function createBacklog(data) {
+exports.createBacklog = async (data) => {
   const query = `
     INSERT INTO backlogs 
-      (title, student_id, name, message, sched_date, status, created_at, modified_at, completed_at)
-    VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW(), ?)
+      (student_id, name, message, sched_date, status, created_at, modified_at, completed_at)
+    VALUES ( ?, ?, ?, ?, ?, NOW(), NOW(), ?)
   `;
   const params = [
-    data.title,
     data.student_id || null,
     data.name || null,
     data.message || null,
@@ -31,7 +32,7 @@ async function createBacklog(data) {
  * @param {Object} updateData - The data to update.
  * @returns {Promise<Object>} The updated backlog record.
  */
-async function updateBacklog(id, updateData) {
+exports.updateBacklog = async (id, updateData) => {
   let fields = [];
   let params = [];
 
@@ -60,14 +61,12 @@ async function updateBacklog(id, updateData) {
   return { id, ...updateData };
 }
 
-
-
 /**
  * Retrieve backlog records based on optional filters.
  * @param {Object} filter - Filter criteria (e.g. status, sched_date).
  * @returns {Promise<Array>} A list of backlog records.
  */
-async function getBacklogs(filter = {}) {
+exports.getBacklogs = async (filter = {}) => {
   let query = "SELECT * FROM backlogs";
   let params = [];
   let conditions = [];
@@ -91,8 +90,14 @@ async function getBacklogs(filter = {}) {
   return rows;
 }
 
-module.exports = {
-  createBacklog,
-  updateBacklog,
-  getBacklogs,
-};
+/**
+ * Delete a backlog record by its ID.
+ * @param {number} id - The backlog record ID.
+ * @returns {Promise<void>}
+ */
+exports.deleteBacklog = async (id) => {
+  const query = "DELETE FROM backlogs WHERE id = ?";
+  const params = [id];
+
+  await db.query(query, params);
+}
