@@ -6,6 +6,7 @@ const getResources = require("../controllers/resourcesController");
 
 // Define routes and link them to controller functions
 router.post("/login", authController.login);
+router.post('/google-login', authController.googleLogin);
 router.get("/user", authController.getUser);
 router.put("/update-profile", authController.updateProfile);
 router.put("/update-password", authController.updatePassword);

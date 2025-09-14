@@ -101,3 +101,18 @@ exports.deleteBacklog = async (id) => {
 
   await db.query(query, params);
 }
+
+
+exports.updateProposalStatus = async (id, status, comment) => {
+  const query = `
+    UPDATE backlogs
+    SET status = ?, comment = ?, modified_at = NOW()
+    WHERE id = ?
+  `;
+  const params = [status, comment, id];
+
+  await db.query(query, params);
+
+  // Return updated object (for frontend convenience)
+  return { id, status, comment };
+};

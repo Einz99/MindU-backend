@@ -294,3 +294,66 @@ exports.deleteResource = async (req, res) => {
     return res.status(500).json({ message: "Server error", error: error.message });
   }
 };
+
+exports.getTopResourcesAndWellness = async (req, res) => {
+  try {
+    // Get top 5 resources (isResource = 1)
+    const [topResources] = await db.query(
+      `
+      SELECT ID, title, category, views, banner, filepath, resourceType
+      FROM (
+          SELECT 
+              ID, title, category, views, banner, filepath, resourceType,
+              ROW_NUMBER() OVER (PARTITION BY category ORDER BY views DESC) AS rn
+          FROM resources
+          WHERE isResource = 1
+      ) t
+      WHERE rn = 1
+      ORDER BY category;
+      `
+    );
+
+    // Get top 1 wellness per category (isResource = 0)
+    const [topWellness] = await db.query(
+      `
+      SELECT ID, title, category, views, banner, filepath, resourceType
+      FROM resources
+      WHERE isResource = 0
+      ORDER BY views DESC
+      LIMIT 5
+      `
+    );
+
+    return res.status(200).json({
+      topResources,
+      topWellness,
+    });
+  } catch (error) {
+    console.error("Error fetching top resources/wellness:", error);
+    return res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
+
+exports.incrementView = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // 1️⃣ Update views
+    const [result] = await db.query(
+      `UPDATE resources SET views = COALESCE(views, 0) + 1 WHERE id = ?`,
+      [id]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ message: "Resource not found" });
+    }
+
+    // 2️⃣ Optional: return new view count
+    const [rows] = await db.query(`SELECT views FROM resources WHERE id = ?`, [id]);
+
+    return res.status(200).json({ message: "View count incremented", views: rows[0].views });
+  } catch (err) {
+    console.error("Error incrementing view:", err);
+    return res.status(500).json({ message: "Server error", error: err.message });
+  }
+};

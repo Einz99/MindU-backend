@@ -78,6 +78,38 @@ exports.login = async (req, res) => {
   }
 };
 
+exports.googleLogin = async (req, res) => {
+  const { email } = req.body; // this comes from Google
+
+  try {
+    const [results] = await db.query("SELECT * FROM students WHERE email = ?", [email]);
+
+    if (results.length === 0) {
+      return res.status(401).json({ message: "User not found" });
+    }
+
+    const user = results[0];
+
+    // No password needed — Google verified email
+    const accessToken = jwt.sign(
+      { id: user.id, firstLogin: user.firstLogin },
+      process.env.JWT_SECRET,
+      { expiresIn: process.env.ACCESS_TOKEN_EXPIRY }
+    );
+
+    const refreshToken = jwt.sign(
+      { id: user.id },
+      process.env.REFRESH_SECRET,
+      { expiresIn: process.env.REFRESH_TOKEN_EXPIRY }
+    );
+
+    return res.json({ accessToken, refreshToken, user });
+  } catch (err) {
+    console.error("Error during Google login:", err);
+    return res.status(500).json({ error: "Database error" });
+  }
+};
+
 exports.getUser = async (req, res) => {
   const token = req.headers.authorization?.split(" ")[1];
   if (!token) return res.status(401).json({ message: "No token provided" });

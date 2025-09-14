@@ -18,7 +18,11 @@ SELECT * FROM resources;
 SELECT * FROM ActivityLog;
 SELECT * FROM backlogs;
 SELECT * FROM mood_data;
+SELECT * FROM students_login;
+SELECT * FROM StudentActivityLog;
 
+#SHOW TABLES
+SHOW TABLES;
 
 CREATE TABLE students (
 	id INT AUTO_INCREMENT PRIMARY KEY NOT NULL,
@@ -51,10 +55,6 @@ CREATE TABLE staffs (
     modified_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-# initial staff
-INSERT INTO staffs (name, email, password, passwordLength, position)
-VALUES ('Mind-U','fssv.mindu@gmail.com', '1234567890', 10, 'Admin');
-
 CREATE TABLE announcements (
 	ID INT AUTO_INCREMENT PRIMARY KEY NOT NULL,
     student_id INT,
@@ -77,21 +77,25 @@ CREATE TABLE resources (
     status ENUM('Posted', 'Draft'),
     description TEXT NOT NULL,
     filepath VARCHAR(10000) NOT NULL,
+    views INT DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     posted_at DATETIME DEFAULT NULL,
     modified_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
+SELECT * FROM resources;
+
 CREATE TABLE backlogs (
 	id INT AUTO_INCREMENT PRIMARY KEY NOT NULL,
     title ENUM("Appointment Request", "Guidance Related Events") DEFAULT "Appointment Request",
     student_id INT NULL,
+    isStaffRequest BOOL,
     staff_id INT NULL,
     comment TEXT,
     name VARCHAR(255),
-    message TEXT,
     sched_date DATETIME DEFAULT NULL,
-    status ENUM('Pending', 'Scheduled', 'Missed', 'Completed', 'Cancelled', 'Trash') DEFAULT 'Pending',
+    time_request DATETIME DEFAULT NULL,
+    status ENUM('Pending', 'Scheduled', 'Missed', 'Completed', 'Cancelled', 'Trash', 'Denied') DEFAULT 'Pending',
     proposal VARCHAR(255),
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     modified_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -99,6 +103,36 @@ CREATE TABLE backlogs (
     FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
     FOREIGN KEY (staff_id) REFERENCES staffs(id) ON DELETE CASCADE
 );
+
+SELECT * FROM backlogs
+WHERE status = 'Scheduled';
+
+SELECT * FROM students
+WHERE id = 46;
+
+SELECT * FROM staffs;
+
+SELECT adviser, LENGTH(adviser) FROM students WHERE id = 46;
+SELECT name, LENGTH(name) FROM staffs WHERE id = 9;
+
+SELECT 
+        b.id AS backlog_id,
+        s.id AS student_id,
+        CONCAT(s.firstName, ' ', s.lastName) AS student_name,
+        b.sched_date,
+        b.status
+      FROM backlogs b
+      JOIN students s ON b.student_id = s.id
+      JOIN staffs st ON s.adviser = st.name
+      WHERE st.id = 9
+        AND b.status = 'Scheduled'
+      ORDER BY b.sched_date ASC;
+
+SELECT s.adviser FROM students WHERE id = 46;
+
+UPDATE students
+SET adviser = 'Ronald M. Villarde', section = 'BSIT 3-1'
+WHERE id = 46;
 
 CREATE TABLE ActivityLog(
 	id INT AUTO_INCREMENT PRIMARY KEY NOT NULL,
@@ -125,25 +159,125 @@ CREATE TABLE chatbot_history (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE students_login(
+	id INT AUTO_INCREMENT PRIMARY KEY NOT NULL,
+    student_id INT,
+    FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
+    login_time DATETIME DEFAULT CURRENT_TIMESTAMP 
+);
+
+CREATE TABLE studentActivityLog(
+	id INT AUTO_INCREMENT PRIMARY KEY NOT NULL,
+    module ENUM('Resource', 'Wellness', 'Chatbot', 'Mood', 'Pet') NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+# initial staff and super super admin
+INSERT INTO staffs (name, email, password, passwordLength, position)
+VALUES ('Mind-U','fssv.mindu@gmail.com', '1234567890', 10, 'Admin');
 
 # New Tables and Alterations
 
 CREATE TABLE students_login(
 	id INT AUTO_INCREMENT PRIMARY KEY NOT NULL,
     student_id INT,
+    FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
     login_time DATETIME DEFAULT CURRENT_TIMESTAMP 
 );
 
-CREATE TABLE StudentActivityLog(
+CREATE TABLE studentActivityLog(
 	id INT AUTO_INCREMENT PRIMARY KEY NOT NULL,
-    module ENUM('Resource', 'Wellness', 'Chatbot', 'Mood', 'Pet') NOT NULL,
-	content_id INT,
-    FOREIGN KEY (content_id) REFERENCES resources(ID),
+    module ENUM('Resource', 'Wellness', 'Chatbot', 'Mood', 'Scheduler', 'Pet') NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
+
+SELECT COUNT(id) from studentActivityLog;
 
 ALTER TABLE backlogs
 ADD COLUMN (isStaffRequest BOOL, staff_id INT, comment TEXT);
 
 ALTER TABLE staffs
 DROP COLUMN status;
+
+ALTER TABLE resources
+ADD COLUMN (views INT);
+
+ALTER TABLE backlogs 
+MODIFY COLUMN status 
+    ENUM('Pending', 'Scheduled', 'Missed', 'Completed', 'Cancelled', 'Trash', 'Denied') 
+    DEFAULT 'Pending';
+    
+# Dummy Data for activitylogs of students and resources views and student login
+
+INSERT INTO studentActivityLog (module, created_at)
+WITH RECURSIVE seq AS (
+  SELECT 1 AS n
+  UNION ALL
+  SELECT n+1 FROM seq WHERE n < 1800 -- 90 days × 20 logs per day
+)
+SELECT 
+  ELT(FLOOR(1 + (RAND() * 6)), 'Resource', 'Wellness', 'Chatbot', 'Mood', 'Scheduler', 'Pet') AS module,
+  DATE_SUB(CURDATE(), INTERVAL FLOOR((n-1)/20) DAY)  -- spread 20 per day
+    + INTERVAL (RAND() * 86400) SECOND               -- random time in day
+FROM seq;
+
+SET SQL_SAFE_UPDATES = 0;
+
+UPDATE resources
+SET views = FLOOR(50 + (RAND() * 101));
+
+SET SQL_SAFE_UPDATES = 1;
+
+DELIMITER $$
+
+DROP PROCEDURE IF EXISTS populate_students_login$$
+CREATE PROCEDURE populate_students_login()
+BEGIN
+    DECLARE total_students INT;
+    DECLARE day_count INT DEFAULT 0;
+    DECLARE max_days INT DEFAULT 90;
+    DECLARE current_day DATE;
+    DECLARE num_to_insert INT;
+
+    -- Get total number of students
+    SELECT COUNT(*) INTO total_students FROM students;
+
+    WHILE day_count < max_days DO
+        SET current_day = CURDATE() - INTERVAL day_count DAY;
+
+        -- Determine 60-90% of total students for this day
+        SET num_to_insert = FLOOR(total_students * (0.6 + (RAND() * 0.3)));
+
+        -- Insert random students excluding already logged ones for that day
+        INSERT INTO students_login (student_id, login_time)
+        SELECT s.id,
+               CONCAT(current_day, ' ',
+                      LPAD(FLOOR(RAND()*24),2,'0'), ':',
+                      LPAD(FLOOR(RAND()*60),2,'0'), ':',
+                      LPAD(FLOOR(RAND()*60),2,'0'))
+        FROM students s
+        WHERE s.id NOT IN (
+            SELECT student_id 
+            FROM students_login 
+            WHERE DATE(login_time) = current_day
+        )
+        ORDER BY RAND()
+        LIMIT num_to_insert;
+
+        SET day_count = day_count + 1;
+    END WHILE;
+END$$
+
+DELIMITER ;
+
+-- Call the procedure
+CALL populate_students_login();
+
+ALTER TABLE backlogs
+DROP COLUMN message;
+
+ALTER TABLE backlogs
+ADD COLUMN time_request DATETIME DEFAULT NULL;
+
+ALTER TABLE resources
+MODIFY COLUMN views INT DEFAULT 0;

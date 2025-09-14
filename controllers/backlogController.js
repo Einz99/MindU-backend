@@ -297,3 +297,96 @@ exports.createRequest = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
+
+exports.updateProposalStatus = async (req, res) => {
+  try {
+    const id = req.params.id;
+    const { status, comment } = req.body; // status: "Approved" or "Denied"
+
+    if (!["Approved", "Denied"].includes(status)) {
+      return res.status(400).json({ error: "Invalid status" });
+    }
+
+    const updatedStatus = status === "Approved" ? "Scheduled" : "Denied";
+
+    // Use new service
+    const updatedRecord = await backlogService.updateProposalStatus(id, updatedStatus, comment);
+
+    // Log activity
+    const [backlogRow] = await db.query("SELECT * FROM backlogs WHERE id = ?", [id]);
+    const backlog = backlogRow[0];
+    const message = `Admin updated proposal for "${backlog.name}" to "${updatedStatus}"`;
+    await db.query("INSERT INTO ActivityLog (message) VALUES (?)", [message]);
+
+    // Emit updated backlogs
+    const io = req.io;
+    if (io) {
+      const updatedBacklogs = await backlogService.getBacklogs({});
+      io.emit("updateBacklogs", updatedBacklogs);
+    }
+
+    return res.json({ success: true, data: updatedRecord });
+
+  } catch (error) {
+    console.error("Error updating proposal status:", error);
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+exports.getRequestsByStaffId = async (req, res) => {
+  const { staffId } = req.params;
+  try {
+    const [rows] = await db.query(
+      `
+      SELECT 
+        b.id AS backlog_id,
+        s.id AS student_id,
+        CONCAT(s.firstName, ' ', s.lastName) AS student_name,
+        b.sched_date,
+        b.status
+      FROM backlogs b
+      JOIN students s ON b.student_id = s.id
+      JOIN staffs st ON s.adviser = st.name
+      WHERE st.id = ?
+        AND b.status = 'Scheduled'
+      ORDER BY b.sched_date ASC
+      `,
+      [staffId]
+    );
+    
+    return res.json(rows);
+  } catch (err) {
+    console.error("Error fetching scheduled backlogs:", err);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+};
+
+exports.getStaffRequestsByStaffId = async (req, res) => {
+  const { staffId } = req.params;
+
+  try {
+    const [rows] = await db.query(
+      `
+      SELECT 
+        b.id,
+        b.sched_date,
+        b.status,
+        b.comment,
+        b.name
+      FROM backlogs b
+      WHERE b.staff_id = ?
+        AND (b.status = 'Pending' OR b.status = 'Scheduled')
+      ORDER BY 
+        CASE WHEN b.sched_date IS NULL THEN 1 ELSE 0 END, -- pending first
+        b.sched_date ASC,
+        b.created_at DESC
+      `,
+      [staffId]
+    );
+
+    res.json(rows); // staff’s own meeting requests only
+  } catch (err) {
+    console.error("Error fetching requests:", err);
+    res.status(500).json({ error: "Database error" });
+  }
+};

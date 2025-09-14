@@ -88,6 +88,12 @@ app.use("/api/moods", moodRoutes)
 const chatbotRoutes = require('./routes/chatbotRoutes');
 app.use('/api/chatbot', chatbotRoutes);
 
+const studentActivityRoutes = require("./routes/studentActivityRoutes");
+app.use( "/api/student-activities", studentActivityRoutes );
+
+const studentLogInPercentageRoutes = require("./routes/studentLogInPercentageRoutes");
+app.use( "/api/student-login-percentages", studentLogInPercentageRoutes );
+
 const announcementRoutes = require("./routes/announcementRoutes");
 app.use(
   "/api/announcements",

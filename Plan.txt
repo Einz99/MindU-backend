@@ -1,0 +1,30 @@
+Plan for the All.
+
+
+Web plan.
+1st create the endpoints needed for the web dashboard.
+
+student activity log table for first quadrant (TL) done (only scheduler and game left)
+resource table with added views where in any time it was click add +1 to database on app. (TR) 2 done 
+Schedules is backlogs table where in 1st week is last week, 2nd week is last last week and so on. (BL) 2 done
+students login is for active students where in will edit that if its today bottom is yesterday if date change then its today will be the bottom (BR) 2 done
+
+Pending Proposals
+New endpoints where in it only updates to fill comment and change its status. if denied then will be denied if approve then scheduled. done
+
+Add for the proposals and time available in schedulers
+Add chat page.
+The Landing Page.
+
+
+Mobile.
+
+Google Login - just use email if it exist as work around.
+Chatbot - waiting for the expected scenarios and for trigger words
+resource html viewing problem. (done)
+Game
+ - Tutorial - will do it after I am finished with google login and chatbot.
+ - game itself
+Connect all the things from front end to the apps. 
+
+need to expedite this coding so need to focus on it no distractions allowed.

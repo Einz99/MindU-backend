@@ -37,7 +37,9 @@ router.put(
 // Other resource routes
 router.get("/", resourcesController.getResources);
 router.get("/wellness", resourcesController.getWellness);
+router.get("/top", resourcesController.getTopResourcesAndWellness);
 router.get("/:id", resourcesController.getResourceById);
+router.post("/increment-view/:id", resourcesController.incrementView);
 router.post("/delete-multiple", resourcesController.deleteResources);
 router.delete("/:id", resourcesController.deleteResource);
 
