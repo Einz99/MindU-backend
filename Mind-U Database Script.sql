@@ -156,6 +156,8 @@ CREATE TABLE chatbot_history (
     FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
     is_from_bot bool NOT NULL,
     message TEXT NOT NULL,
+    lastmsg TEXT NOT NULL,
+    status ENUM('pending', 'ongoing', 'completed') DEFAULT 'pending',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -170,6 +172,15 @@ CREATE TABLE studentActivityLog(
 	id INT AUTO_INCREMENT PRIMARY KEY NOT NULL,
     module ENUM('Resource', 'Wellness', 'Chatbot', 'Mood', 'Pet') NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+CREATE TABLE availability (
+	id INT AUTO_INCREMENT PRIMARY KEY NOT NULL,
+	date DATE NOT NULL,
+	time TIME NOT NULL,
+	UNIQUE(date, time), -- Ensure no duplicate combinations of date and time
+	INDEX(date), -- Optional: index for faster queries by date
+	INDEX(time) -- Optional: index for faster queries by time
 );
 
 # initial staff and super super admin
@@ -190,6 +201,27 @@ CREATE TABLE studentActivityLog(
     module ENUM('Resource', 'Wellness', 'Chatbot', 'Mood', 'Scheduler', 'Pet') NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
+
+CREATE TABLE chatbot_history (
+	chat_id INT AUTO_INCREMENT PRIMARY KEY NOT NULL,
+    student_id INT NOT NULL,
+    FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
+    is_from_bot bool NOT NULL,
+    message TEXT NOT NULL,
+    lastmsg TEXT NOT NULL,
+    status ENUM('pending', 'ongoing', 'completed') DEFAULT 'pending',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE availability (
+	id INT AUTO_INCREMENT PRIMARY KEY NOT NULL,
+	date DATE NOT NULL,
+	time TIME NOT NULL,
+	UNIQUE(date, time), -- Ensure no duplicate combinations of date and time
+	INDEX(date), -- Optional: index for faster queries by date
+	INDEX(time) -- Optional: index for faster queries by time
+);
+
 
 SELECT COUNT(id) from studentActivityLog;
 

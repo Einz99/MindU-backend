@@ -9,7 +9,7 @@ require('./jobs');
 const os = require("os");
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT;
 
 // Create HTTP server for WebSocket
 const server = http.createServer(app);
@@ -25,10 +25,11 @@ io.on("connection", (socket) => {
 
 // Middleware
 const allowedOrigins = [
-  'http://192.168.1.11:3001',
+  'http://192.168.1.6:3001',
   'http://localhost:3001',
   'http://localhost:3000',        // ← ADD THIS IF NEEDED
-  'http://192.168.1.11:3000'      // ← OR THIS
+  'http://192.168.1.6:3000',      // ← OR THIS
+  // '*'
 ];
 
 app.use(cors({
@@ -140,6 +141,6 @@ const getLocalIP = () => {
 
 // Start server
 
-server.listen(PORT, () => {
+server.listen(PORT, '0.0.0.0', () => {
   console.log(`✅ Server running on http://${getLocalIP()}:${PORT}`);
 });
