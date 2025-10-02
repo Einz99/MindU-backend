@@ -119,7 +119,7 @@ exports.getUser = async (req, res) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const userId = decoded.id;
 
-    const sql = "SELECT id, firstName, lastName, section, adviser, age, gender, profilePic, email, password FROM students WHERE id = ?";
+    const sql = "SELECT id, firstName, lastName, section, adviser, age, gender, profilePic, email, isAskingHelp FROM students WHERE id = ?";
     const [rows] = await db.query(sql, [userId]);
 
     if (rows.length === 0) return res.status(404).json({ message: "User not found" });

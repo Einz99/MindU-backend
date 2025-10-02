@@ -38,6 +38,8 @@ CREATE TABLE students (
     gender CHAR,
     profilePic VARCHAR(255),
     firstLogin BOOLEAN DEFAULT TRUE,
+    isAskingHelp BOOLEAN DEFAULT FALSE,
+    chatStatus ENUM('Pending', 'On-going', 'Completed') DEFAULT 'Completed',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     modified_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -104,36 +106,6 @@ CREATE TABLE backlogs (
     FOREIGN KEY (staff_id) REFERENCES staffs(id) ON DELETE CASCADE
 );
 
-SELECT * FROM backlogs
-WHERE status = 'Scheduled';
-
-SELECT * FROM students
-WHERE id = 46;
-
-SELECT * FROM staffs;
-
-SELECT adviser, LENGTH(adviser) FROM students WHERE id = 46;
-SELECT name, LENGTH(name) FROM staffs WHERE id = 9;
-
-SELECT 
-        b.id AS backlog_id,
-        s.id AS student_id,
-        CONCAT(s.firstName, ' ', s.lastName) AS student_name,
-        b.sched_date,
-        b.status
-      FROM backlogs b
-      JOIN students s ON b.student_id = s.id
-      JOIN staffs st ON s.adviser = st.name
-      WHERE st.id = 9
-        AND b.status = 'Scheduled'
-      ORDER BY b.sched_date ASC;
-
-SELECT s.adviser FROM students WHERE id = 46;
-
-UPDATE students
-SET adviser = 'Ronald M. Villarde', section = 'BSIT 3-1'
-WHERE id = 46;
-
 CREATE TABLE ActivityLog(
 	id INT AUTO_INCREMENT PRIMARY KEY NOT NULL,
     message TEXT,
@@ -154,10 +126,18 @@ CREATE TABLE chatbot_history (
 	chat_id INT AUTO_INCREMENT PRIMARY KEY NOT NULL,
     student_id INT NOT NULL,
     FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
-    is_from_bot bool NOT NULL,
+    is_from_bot BOOL DEFAULT FALSE NOT NULL,
+    is_agent BOOL DEFAULT FALSE NOT NULL,
     message TEXT NOT NULL,
-    lastmsg TEXT NOT NULL,
-    status ENUM('pending', 'ongoing', 'completed') DEFAULT 'pending',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE office_chat (
+	chat_id INT AUTO_INCREMENT PRIMARY KEY NOT NULL,
+    student_id INT NOT NULL,
+    FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
+    is_from_office BOOL DEFAULT FALSE NOT NULL,
+    message TEXT NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -183,6 +163,55 @@ CREATE TABLE availability (
 	INDEX(time) -- Optional: index for faster queries by time
 );
 
+CREATE TABLE pets (
+    id INT AUTO_INCREMENT PRIMARY KEY NOT NULL,
+    student_id INT NOT NULL,
+    FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
+    pet_name VARCHAR(255) NOT NULL,
+    pet_type ENUM('cat_1', 'cat_2', 'cat_3', 'dog_1', 'dog_2', 'dog_3') NOT NULL,
+    coins INT NOT NULL DEFAULT 20,  -- Starting coins
+    food_stack INT DEFAULT 5,  -- Starting food
+    hygiene_stack INT DEFAULT 5,  -- Starting hygiene tools
+    pet_head INT DEFAULT NULL,  -- Accessory ID for pet's head (NULL means no accessory)
+    pet_neck INT DEFAULT NULL,  -- Accessory ID for pet's neck
+    pet_eyes INT DEFAULT NULL,  -- Accessory ID for pet's eyes
+    hunger INT DEFAULT 70,  -- Pet's hunger level (0-100)
+    playfulness INT DEFAULT 70,  -- Pet's playfulness level (0-100)
+    hygiene INT DEFAULT 70,  -- Pet's hygiene level (0-100)
+    sleep INT DEFAULT 70,  -- Pet's sleep level (0-100)
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE pet_logins (
+    pet_id INT NOT NULL,
+    last_login DATE NOT NULL,
+    daily_bonus INT DEFAULT 0,  -- Bonus granted on login, which can be added to coins
+    PRIMARY KEY (pet_id),
+    FOREIGN KEY (pet_id) REFERENCES pets(id) ON DELETE CASCADE
+);
+
+CREATE TABLE pet_items (
+    pet_id INT NOT NULL,
+    item_id INT NOT NULL,  -- In-game item ID (1 for food, 2 for hygiene, etc.)
+    quantity INT NOT NULL DEFAULT 1,  -- Quantity of the item
+    PRIMARY KEY (pet_id, item_id),
+    FOREIGN KEY (pet_id) REFERENCES pets(id) ON DELETE CASCADE
+);
+
+CREATE TABLE pet_accessories (
+    pet_id INT NOT NULL,
+    accessory_id INT NOT NULL,  -- In-game accessory ID
+    PRIMARY KEY (pet_id, accessory_id),
+    FOREIGN KEY (pet_id) REFERENCES pets(id) ON DELETE CASCADE
+);
+
+DROP TABLE pet_logins;
+DROP TABLE pet_items;
+DROP TABLE pet_accessories;
+DROP TABLE pets;
+
+
 # initial staff and super super admin
 INSERT INTO staffs (name, email, password, passwordLength, position)
 VALUES ('Mind-U','fssv.mindu@gmail.com', '1234567890', 10, 'Admin');
@@ -206,10 +235,18 @@ CREATE TABLE chatbot_history (
 	chat_id INT AUTO_INCREMENT PRIMARY KEY NOT NULL,
     student_id INT NOT NULL,
     FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
-    is_from_bot bool NOT NULL,
+    is_from_bot BOOL DEFAULT FALSE NOT NULL,
+    is_trigger BOOL DEFAULT FALSE NOT NULL,
     message TEXT NOT NULL,
-    lastmsg TEXT NOT NULL,
-    status ENUM('pending', 'ongoing', 'completed') DEFAULT 'pending',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE office_chat (
+	chat_id INT AUTO_INCREMENT PRIMARY KEY NOT NULL,
+    student_id INT NOT NULL,
+    FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
+    is_from_office BOOL DEFAULT FALSE NOT NULL,
+    message TEXT NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -222,94 +259,61 @@ CREATE TABLE availability (
 	INDEX(time) -- Optional: index for faster queries by time
 );
 
+DROP TABLE chatbot_history;
 
-SELECT COUNT(id) from studentActivityLog;
+ALTER TABLE chatbot_history
+ADD COLUMN is_trigger BOOL DEFAULT FALSE NOT NULL,
+DROP COLUMN is_agent;
 
-ALTER TABLE backlogs
-ADD COLUMN (isStaffRequest BOOL, staff_id INT, comment TEXT);
+ALTER TABLE students
+ADD COLUMN isAskingHelp BOOLEAN DEFAULT FALSE;
 
-ALTER TABLE staffs
-DROP COLUMN status;
+ALTER TABLE students
+ADD COLUMN chatStatus ENUM('Pending', 'On-going', 'Completed') DEFAULT 'Completed';
 
-ALTER TABLE resources
-ADD COLUMN (views INT);
+-- 1. pets Table
+CREATE TABLE pets (
+    id INT AUTO_INCREMENT PRIMARY KEY NOT NULL,
+    student_id INT NOT NULL,
+    FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
+    pet_name VARCHAR(255) NOT NULL,
+    pet_type ENUM('cat_1', 'cat_2', 'cat_3', 'dog_1', 'dog_2', 'dog_3') NOT NULL,
+    coins INT NOT NULL DEFAULT 20,  -- Starting coins
+    food_stack INT DEFAULT 5,  -- Starting food
+    hygiene_stack INT DEFAULT 5,  -- Starting hygiene tools
+    pet_head INT DEFAULT NULL,  -- Accessory ID for pet's head (NULL means no accessory)
+    pet_neck INT DEFAULT NULL,  -- Accessory ID for pet's neck
+    pet_eyes INT DEFAULT NULL,  -- Accessory ID for pet's eyes
+    hunger INT DEFAULT 70,  -- Pet's hunger level (0-100)
+    playfulness INT DEFAULT 70,  -- Pet's playfulness level (0-100)
+    hygiene INT DEFAULT 70,  -- Pet's hygiene level (0-100)
+    sleep INT DEFAULT 70,  -- Pet's sleep level (0-100)
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
 
-ALTER TABLE backlogs 
-MODIFY COLUMN status 
-    ENUM('Pending', 'Scheduled', 'Missed', 'Completed', 'Cancelled', 'Trash', 'Denied') 
-    DEFAULT 'Pending';
-    
-# Dummy Data for activitylogs of students and resources views and student login
+-- 2. pet_logins Table
+CREATE TABLE pet_logins (
+    pet_id INT NOT NULL,
+    last_login DATE NOT NULL,
+    daily_bonus INT DEFAULT 0,  -- Bonus granted on login, which can be added to coins
+    PRIMARY KEY (pet_id),
+    FOREIGN KEY (pet_id) REFERENCES pets(id) ON DELETE CASCADE
+);
 
-INSERT INTO studentActivityLog (module, created_at)
-WITH RECURSIVE seq AS (
-  SELECT 1 AS n
-  UNION ALL
-  SELECT n+1 FROM seq WHERE n < 1800 -- 90 days × 20 logs per day
-)
-SELECT 
-  ELT(FLOOR(1 + (RAND() * 6)), 'Resource', 'Wellness', 'Chatbot', 'Mood', 'Scheduler', 'Pet') AS module,
-  DATE_SUB(CURDATE(), INTERVAL FLOOR((n-1)/20) DAY)  -- spread 20 per day
-    + INTERVAL (RAND() * 86400) SECOND               -- random time in day
-FROM seq;
+-- 3. pet_items Table
+CREATE TABLE pet_items (
+    pet_id INT NOT NULL,
+    item_id INT NOT NULL,  -- In-game item ID (1 for food, 2 for hygiene, etc.)
+    quantity INT NOT NULL DEFAULT 1,  -- Quantity of the item
+    PRIMARY KEY (pet_id, item_id),
+    FOREIGN KEY (pet_id) REFERENCES pets(id) ON DELETE CASCADE
+);
 
-SET SQL_SAFE_UPDATES = 0;
-
-UPDATE resources
-SET views = FLOOR(50 + (RAND() * 101));
-
-SET SQL_SAFE_UPDATES = 1;
-
-DELIMITER $$
-
-DROP PROCEDURE IF EXISTS populate_students_login$$
-CREATE PROCEDURE populate_students_login()
-BEGIN
-    DECLARE total_students INT;
-    DECLARE day_count INT DEFAULT 0;
-    DECLARE max_days INT DEFAULT 90;
-    DECLARE current_day DATE;
-    DECLARE num_to_insert INT;
-
-    -- Get total number of students
-    SELECT COUNT(*) INTO total_students FROM students;
-
-    WHILE day_count < max_days DO
-        SET current_day = CURDATE() - INTERVAL day_count DAY;
-
-        -- Determine 60-90% of total students for this day
-        SET num_to_insert = FLOOR(total_students * (0.6 + (RAND() * 0.3)));
-
-        -- Insert random students excluding already logged ones for that day
-        INSERT INTO students_login (student_id, login_time)
-        SELECT s.id,
-               CONCAT(current_day, ' ',
-                      LPAD(FLOOR(RAND()*24),2,'0'), ':',
-                      LPAD(FLOOR(RAND()*60),2,'0'), ':',
-                      LPAD(FLOOR(RAND()*60),2,'0'))
-        FROM students s
-        WHERE s.id NOT IN (
-            SELECT student_id 
-            FROM students_login 
-            WHERE DATE(login_time) = current_day
-        )
-        ORDER BY RAND()
-        LIMIT num_to_insert;
-
-        SET day_count = day_count + 1;
-    END WHILE;
-END$$
-
-DELIMITER ;
-
--- Call the procedure
-CALL populate_students_login();
-
-ALTER TABLE backlogs
-DROP COLUMN message;
-
-ALTER TABLE backlogs
-ADD COLUMN time_request DATETIME DEFAULT NULL;
-
-ALTER TABLE resources
-MODIFY COLUMN views INT DEFAULT 0;
+-- 4. pet_accessories Table
+CREATE TABLE pet_accessories (
+    pet_id INT NOT NULL,
+    accessory_id INT NOT NULL,  -- In-game accessory ID
+    PRIMARY KEY (pet_id, accessory_id),
+    FOREIGN KEY (pet_id) REFERENCES pets(id) ON DELETE CASCADE
+);
