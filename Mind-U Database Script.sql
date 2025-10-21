@@ -63,6 +63,11 @@ CREATE TABLE staffs (
     modified_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+
+# initial staff and super super admin
+INSERT INTO staffs (name, email, password, passwordLength, position)
+VALUES ('Mind-U','fssv.mindu@gmail.com', '1234567890', 10, 'Admin');
+
 CREATE TABLE announcements (
 	ID INT AUTO_INCREMENT PRIMARY KEY NOT NULL,
     student_id INT,
@@ -186,10 +191,10 @@ CREATE TABLE pets (
     pet_neck INT DEFAULT NULL,  -- Accessory ID for pet's neck 5-8
     pet_neck INT DEFAULT NULL,  -- Accessory ID for pet's neck 5-8
     pet_eyes INT DEFAULT NULL,  -- Accessory ID for pet's eyes 9-12
-    hunger INT DEFAULT 70,  -- Pet's hunger level (0-100)
-    playfulness INT DEFAULT 70,  -- Pet's playfulness level (0-100)
-    hygiene INT DEFAULT 70,  -- Pet's hygiene level (0-100)
-    sleep INT DEFAULT 70,  -- Pet's sleep level (0-100)
+    hunger INT DEFAULT 100,  -- Pet's hunger level (0-100)
+    playfulness INT DEFAULT 100,  -- Pet's playfulness level (0-100)
+    hygiene INT DEFAULT 100,  -- Pet's hygiene level (0-100)
+    sleep INT DEFAULT 100,  -- Pet's sleep level (0-100)
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -228,10 +233,6 @@ CREATE TABLE pet_bath_soap (
     PRIMARY KEY (pet_id, soap_type),
     FOREIGN KEY (pet_id) REFERENCES pets(id) ON DELETE CASCADE
 );
-
-# initial staff and super super admin
-INSERT INTO staffs (name, email, password, passwordLength, position)
-VALUES ('Mind-U','fssv.mindu@gmail.com', '1234567890', 10, 'Admin');
 
 # New Tables and Alterations
 

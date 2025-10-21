@@ -10,6 +10,7 @@ router.get('/get-conversation/:userId', chatbotController.getConversation);
 router.get('/students-asking-for-help', chatbotController.getStudentAFH)
 router.put('/get-help/:userId', chatbotController.getHelp);
 router.put('/updateStatus/:userId', chatbotController.updateStatus);
+router.put('/deactivateStatus:userId', chatbotController.deactivate);
 router.get('/get-office-chat-history/:userId', chatbotController.getOfficeChatConversation);
 
 module.exports = router;

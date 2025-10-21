@@ -184,6 +184,19 @@ exports.updateStatus = async (userId) => {
   return updateResult.affectedRows;
 }
 
+exports.deactivate = async (userId) => {
+  const updateQuery = `
+    UPDATE students
+    SET chatStatus = 'Completed', isAskingHelp = 0,
+    WHERE id = ?;
+  `;
+
+  const [updateResult] = await db.query(updateQuery, [userId]);
+  console.log(updateResult.affectedRows);
+
+  return updateResult.affectedRows;
+}
+
 exports.insertChatMessage = async (student_id, message, is_from_office) => {
   try {
     const insertQuery = `

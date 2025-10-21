@@ -142,50 +142,150 @@ io.on("connection", (socket) => {
   socket.on('join-chat', (student_id) => {
     const roomName = `student-${student_id}`;
     socket.join(roomName);
-    activeSessions[student_id] = { 
-      socketId: socket.id, 
+    
+    // Store the student's socket ID and room information
+    activeSessions[student_id] = {
+      socketId: socket.id,
       isAgentAvailable: false,
-      roomName: roomName
+      roomName: roomName,
+      staffSockets: [] // List of agent sockets that have joined this student's room
     };
+    
     console.log(`Student ${student_id} joined room: ${roomName}`);
   });
 
-  // When an agent accepts a chat (joins the student's room)
-  socket.on('join-agent', (student_id) => {
-    const roomName = `student-${student_id}`;
-    socket.join(roomName);
-    
-    if (activeSessions[student_id]) {
-      activeSessions[student_id].isAgentAvailable = true;
-      activeSessions[student_id].agentSocketId = socket.id;
-    }
-    
-    console.log(`Agent joined room: ${roomName} for student ${student_id}`);
-    
-    // Notify the student that agent is available
-    io.to(roomName).emit('join-agent', { 
-      isAgentAvailable: true,
-      student_id: student_id 
+  // When a staff member (agent) joins the chat
+  socket.on('join-agent', () => {
+    // Agents can join all student rooms
+    // They will be able to receive messages from any student room
+    socket.on('join-room', (student_id) => {
+      const roomName = `student-${student_id}`;
+      socket.join(roomName);
+      
+      // Add the staff socket to the list of available staff for the student
+      if (activeSessions[student_id]) {
+        activeSessions[student_id].staffSockets.push(socket.id);
+      }
+      
+      console.log(`Agent joined room: ${roomName}`);
     });
   });
 
-  // Handle disconnections
+  // When agent accepts a chat
+  socket.on('agent-accept-chat', (data) => {
+    const { student_id } = data;
+    const roomName = `student-${student_id}`;
+    
+    console.log(`🤝 Agent ${socket.id} accepted chat for student ${student_id}`);
+    
+    // Update active session
+    if (activeSessions[student_id]) {
+      activeSessions[student_id].isAgentAvailable = true;
+      if (!activeSessions[student_id].staffSockets.includes(socket.id)) {
+        activeSessions[student_id].staffSockets.push(socket.id);
+      }
+    }
+    
+    // Notify the student
+    io.to(roomName).emit('agent-available', { 
+      student_id,
+      isAgentAvailable: true 
+    });
+    
+    console.log(`✅ Emitted agent-available to room ${roomName}`);
+  });
+
+  socket.on('agent-disconnecting', (data) => {
+    const { student_id } = data;
+    const roomName = `student-${student_id}`;
+    
+    console.log(`🤝 Agent ${socket.id} is disconnecting for student ${student_id}`);
+    
+    // Update active session to set agent as not available
+    if (activeSessions[student_id]) {
+      activeSessions[student_id].isAgentAvailable = false; // Make agent unavailable
+      const socketIndex = activeSessions[student_id].staffSockets.indexOf(socket.id);
+      if (socketIndex !== -1) {
+        activeSessions[student_id].staffSockets.splice(socketIndex, 1); // Remove agent socket from the list
+      }
+    }
+
+    // Notify the student that the agent is no longer available
+    io.to(roomName).emit('agent-disconnection', { 
+      student_id,
+      isAgentAvailable: false // Notify student that agent is unavailable
+    });
+
+    console.log(`✅ Emitted agent-disconnection to room ${roomName}`);
+  });
+
+  // When a student sends a message
+  socket.on('student-message', (data) => {
+    const { student_id, message } = data;
+    const roomName = `student-${student_id}`;
+
+    if (activeSessions[student_id]) {
+      // Emit message to the student’s room so that the student sees it
+      io.to(roomName).emit('new-chat-message', {
+        student_id,
+        message,
+        isFromStudent: true
+      });
+
+      // Emit the message to all agents who are in the student’s room
+      activeSessions[student_id].staffSockets.forEach((staffSocketId) => {
+        io.to(staffSocketId).emit('new-chat-message', {
+          student_id,
+          message,
+          isFromStudent: true
+        });
+      });
+
+      console.log(`Student ${student_id} sent message: ${message}`);
+    }
+  });
+
+  // When a staff member replies to the student
+  socket.on('staff-message', (data) => {
+    const { student_id, message } = data;
+    const roomName = `student-${student_id}`;
+
+    // Emit the reply to the student's room so the student can see it
+    io.to(roomName).emit('new-chat-message', {
+      student_id,
+      message,
+      isFromStudent: false
+    });
+
+    console.log(`Agent replied to student ${student_id}: ${message}`);
+  });
+
+  // Handle disconnections and clean up the session
   socket.on("disconnect", () => {
     console.log(`🔴 Client disconnected: ${socket.id}`);
-    
-    // Find and clean up the session
+
+    // Clean up the session and remove from active sessions
     for (const [student_id, session] of Object.entries(activeSessions)) {
-      if (session.socketId === socket.id || session.agentSocketId === socket.id) {
-        console.log(`Cleaning up session for student ${student_id}`);
-        // Don't delete immediately - allow reconnection
+      if (session.socketId === socket.id || session.staffSockets.includes(socket.id)) {
+        // Remove the socket from the staffSockets list
+        activeSessions[student_id].staffSockets = activeSessions[student_id].staffSockets.filter(
+          (staffSocketId) => staffSocketId !== socket.id
+        );
+
+        // If no agents are left, mark the session as inactive
+        if (activeSessions[student_id].staffSockets.length === 0) {
+          activeSessions[student_id].isAgentAvailable = false;
+        }
+
+        // After a 5-second grace period, clean up the session if disconnected
         setTimeout(() => {
           if (activeSessions[student_id] && 
               (activeSessions[student_id].socketId === socket.id || 
-               activeSessions[student_id].agentSocketId === socket.id)) {
+               activeSessions[student_id].staffSockets.includes(socket.id))) {
             delete activeSessions[student_id];
             console.log(`Session deleted for student ${student_id}`);
           }
-        }, 5000); // 5 second grace period for reconnection
+        }, 5000);
         break;
       }
     }

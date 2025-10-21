@@ -196,15 +196,6 @@ exports.updateStatus = async (req, res) => {
     // Update the status of the student
     await chatbotService.updateStatus(userId);
 
-    // Emit the event to notify the frontend that the status was updated
-    if (req.io) {
-      req.io.emit('student-chatStatus-updated', {
-        userId,
-        status: 'On-going', // You can set the status as needed based on your logic
-      });
-      console.log(`Emitted student-chatStatus-updated for user ${userId}`);
-    }
-
     // Return success response
     res.status(200).json({
       success: true,
@@ -232,13 +223,10 @@ exports.insertChatMessage = async (req, res) => {
 
     // Emit event to notify the correct room (based on sender)
     if (req.io) {
-      if (is_from_office) {
-        // If message is from the office (agent), emit to the student's room
-        req.io.to(student_id).emit('new-chat-message', { student_id, message, is_from_office });
-      } else {
-        // If message is from the student, emit to the agent's room
-        req.io.to(`agent-${student_id}`).emit('new-chat-message', { student_id, message, is_from_office });
-      }
+      const studentRoom = `student-${student_id}`;
+      // Emit to the student's room so both the student and all agents listening will receive it
+      req.io.to(studentRoom).emit('new-chat-message', { student_id, message, is_from_office });
+
       console.log('Emitted new-chat-message event');
     }
 
@@ -248,3 +236,31 @@ exports.insertChatMessage = async (req, res) => {
     res.status(500).json({ error: 'An error occurred while inserting the message' });
   }
 };
+
+exports.deactivate = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    if (!userId) {
+      console.log('Missing userId parameter');
+      return res.status(400).json({ 
+        error: 'User ID is required' 
+      });
+    }
+
+    // Update the status of the student
+    await chatbotService.deactivate(userId);
+
+    // Return success response
+    res.status(200).json({
+      success: true,
+    });
+    
+  } catch (error) {
+    console.error('Error occurred during updateStatus:', error); // Debugging error
+    res.status(500).json({ 
+      error: 'An error occurred while processing your request.',
+      success: false
+    });
+  }
+}

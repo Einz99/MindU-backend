@@ -57,18 +57,20 @@ cron.schedule('*/10 * * * *', async () => {
   if (minutes % 10 === 0) {
     try {
       // First query: Decrement sleep for pets not in sleepingPets
+      const sleepingPetIds = Object.keys(sleepingPets);  // Get all pet IDs from sleepingPets
+      const sleepingPetIdsList = sleepingPetIds.length > 0 ? sleepingPetIds.join(', ') : 'NULL'; // Use NULL if no sleepingPets
+
       const [result] = await db.query(`
         UPDATE pets
         SET sleep = GREATEST(sleep - 5, 0)
-        WHERE id NOT IN (${Object.keys(sleepingPets).join(', ')})`);
-      
+        WHERE id NOT IN (${sleepingPetIdsList})`);
+
       // Second query: Add sleep for pets in sleepingPets
-      if (Object.keys(sleepingPets).length > 0) {
-        const petIds = Object.keys(sleepingPets).join(', ');  // Get all pet IDs from sleepingPets
+      if (sleepingPetIds.length > 0) {
         await db.query(`
           UPDATE pets
           SET sleep = sleep + 3
-          WHERE id IN (${petIds})`);
+          WHERE id IN (${sleepingPetIds.join(', ')})`);
       }
 
     } catch (error) {
