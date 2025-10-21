@@ -26,7 +26,7 @@ exports.createBacklog = async (req, res) => {
       data.title = "Request Meeting";
       data.sched_date = null;
       data.status = "Pending";
-
+      
       // Lookup student's firstName and lastName from the students table.
       const [rows] = await db.query(
         "SELECT firstName, lastName, email FROM students WHERE id = ?",

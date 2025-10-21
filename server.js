@@ -6,7 +6,6 @@ const path = require("path");
 const http = require("http");
 const { Server } = require("socket.io");
 require('./jobs');
-require('./petJobs');
 const os = require("os");
 
 const app = express();
@@ -14,22 +13,22 @@ const PORT = process.env.PORT;
 
 // Create HTTP server for WebSocket
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: "*" } });
-
-// WebSocket Connection
-io.on("connection", (socket) => {
-  console.log(`🟢 Client connected: ${socket.id}`);
-  socket.on("disconnect", () => {
-    console.log(`🔴 Client disconnected: ${socket.id}`);
-  });
+const io = new Server(server, { 
+  cors: { 
+    origin: "*",
+    methods: ["GET", "POST"]
+  } 
 });
+
+// Store active sessions
+let activeSessions = {};
 
 // Middleware
 const allowedOrigins = [
   'http://192.168.1.6:3001',
   'http://localhost:3001',
-  'http://localhost:3000',        // ← ADD THIS IF NEEDED
-  'http://192.168.1.6:3000',      // ← OR THIS
+  'http://localhost:3000',
+  'http://192.168.1.6:3000',
   '*'
 ];
 
@@ -113,7 +112,6 @@ app.use(
   activityLogRoutes
 );
 
-// Import Backlog Routes
 const backlogRoutes = require("./routes/backlogRoutes");
 app.use(
   "/api/backlogs",
@@ -126,7 +124,7 @@ app.use(
 
 const chatbotRoutes = require('./routes/chatbotRoutes');
 app.use('/api/chatbot', (req, res, next) => {
-  req.io = io;  // Make `io` available to the route handlers
+  req.io = io;
   next();
 }, chatbotRoutes);
 
@@ -136,94 +134,91 @@ app.use("/api/pets", (req, res, next) => {
   next();
 }, petRoutes);
 
-let activeSessions = {}; // Store active sessions
-let reconnectAttempts = {}; // Track the number of reconnection attempts for each user
-
-// Maximum reconnection attempts
-const MAX_RECONNECT_ATTEMPTS = 10;
-const RECONNECT_DELAY = 3000; // Delay between reconnection attempts in milliseconds
-
-// WebSocket Connection
+// SINGLE WebSocket Connection Handler
 io.on("connection", (socket) => {
-    console.log(`🟢 Client connected: ${socket.id}`);
+  console.log(`🟢 Client connected: ${socket.id}`);
 
-    // Reset reconnection attempts when a new connection is made
-    reconnectAttempts[socket.id] = 0;
+  // When a student joins the chat
+  socket.on('join-chat', (student_id) => {
+    const roomName = `student-${student_id}`;
+    socket.join(roomName);
+    activeSessions[student_id] = { 
+      socketId: socket.id, 
+      isAgentAvailable: false,
+      roomName: roomName
+    };
+    console.log(`Student ${student_id} joined room: ${roomName}`);
+  });
 
-    // Handle student/counselor joining the chat
-    socket.on('join-chat', (userId) => {
-        activeSessions[userId] = socket.id; // Map user to socket ID
-        console.log(`User ${userId} joined with socket ${socket.id}`);
-
-        // Emit to the user if an agent is available
-        if (activeSessions[userId].isAgentAvailable) {
-            socket.emit('agent-available', { isAgentAvailable: true });
-        }
+  // When an agent accepts a chat (joins the student's room)
+  socket.on('join-agent', (student_id) => {
+    const roomName = `student-${student_id}`;
+    socket.join(roomName);
+    
+    if (activeSessions[student_id]) {
+      activeSessions[student_id].isAgentAvailable = true;
+      activeSessions[student_id].agentSocketId = socket.id;
+    }
+    
+    console.log(`Agent joined room: ${roomName} for student ${student_id}`);
+    
+    // Notify the student that agent is available
+    io.to(roomName).emit('join-agent', { 
+      isAgentAvailable: true,
+      student_id: student_id 
     });
+  });
 
-    // When the agent accepts the chat, notify the student
-    socket.on('accept-chat', (userId) => {
-        if (activeSessions[userId]) {
-            io.to(activeSessions[userId]).emit('agent-available', { isAgentAvailable: true });
-            console.log(`Agent accepted chat for user ${userId}`);
-        }
-    });
-
-    // Handle disconnections
-    socket.on('disconnect', () => {
-        console.log(`🔴 Client disconnected: ${socket.id}`);
-
-        // Handle reconnection attempts
-        let userId = Object.keys(activeSessions).find(key => activeSessions[key] === socket.id);
-
-        // If the userId exists and hasn't exceeded max reconnect attempts
-        if (userId && reconnectAttempts[socket.id] < MAX_RECONNECT_ATTEMPTS) {
-            reconnectAttempts[socket.id]++;
-
-            console.log(`Attempting to reconnect for user ${userId}... Attempt #${reconnectAttempts[socket.id]}`);
-
-            // Attempt to reconnect after a delay
-            setTimeout(() => {
-                // Try to reconnect the user (could be an API or socket reconnect logic)
-                reconnectUser(socket, userId);
-            }, RECONNECT_DELAY);
-        } else {
-            // If reconnection attempts exceeded
-            console.log(`Max reconnect attempts reached for user ${userId}`);
-            delete activeSessions[userId]; // Remove from active sessions if max attempts are reached
-        }
-
-        // Clear session on disconnect
-        for (let userId in activeSessions) {
-            if (activeSessions[userId] === socket.id) {
-                delete activeSessions[userId]; // Clear session
-                console.log(`Session for user ${userId} ended`);
-            }
-        }
-    });
+  // Handle disconnections
+  socket.on("disconnect", () => {
+    console.log(`🔴 Client disconnected: ${socket.id}`);
+    
+    // Find and clean up the session
+    for (const [student_id, session] of Object.entries(activeSessions)) {
+      if (session.socketId === socket.id || session.agentSocketId === socket.id) {
+        console.log(`Cleaning up session for student ${student_id}`);
+        // Don't delete immediately - allow reconnection
+        setTimeout(() => {
+          if (activeSessions[student_id] && 
+              (activeSessions[student_id].socketId === socket.id || 
+               activeSessions[student_id].agentSocketId === socket.id)) {
+            delete activeSessions[student_id];
+            console.log(`Session deleted for student ${student_id}`);
+          }
+        }, 5000); // 5 second grace period for reconnection
+        break;
+      }
+    }
+  });
 });
 
-// Function to attempt to reconnect a user
-const reconnectUser = (socket, userId) => {
-    // Check if the userId still exists
-    if (activeSessions[userId]) {
-        console.log(`User ${userId} has successfully reconnected.`);
-        // You could emit some event to notify the client about reconnection success
-        socket.emit('reconnected', { message: 'Reconnection successful!' });
-
-        // Reset reconnection attempts upon successful reconnect
-        reconnectAttempts[socket.id] = 0;
-    } else {
-        // If user session is no longer active, disconnect the socket
-        socket.disconnect();
-        console.log(`User ${userId} not active. Disconnecting.`);
-    }
-};
-
-// Example endpoint that returns a simple "Connected successfully" message
+// Test endpoint
 app.get('/test', (req, res) => {
     console.log('Received request for /test');
-    res.send('Connected successfully');  // Simple response
+    res.send('Connected successfully');
+});
+
+app.post('/toggle-pet-sleep', async (req, res) => {
+    const { petId, isSleeping } = req.body;
+
+    try {
+        console.log(`Received sleep status update for pet ${petId}: ${isSleeping ? "Sleeping" : "Awake"}`);
+
+        // Update the pet's sleep state in memory or database
+        if (isSleeping) {
+            // Add to sleepingPets in memory
+            sleepingPets[petId] = true;
+        } else {
+            // Remove from sleepingPets in memory
+            delete sleepingPets[petId];
+        }
+
+        // Respond back to Unity
+        res.status(200).send({ message: 'Sleep status updated successfully' });
+    } catch (error) {
+        console.error('Error updating sleep status:', error.message);
+        res.status(500).send({ message: 'Error updating sleep status' });
+    }
 });
 
 const getLocalIP = () => {
@@ -237,7 +232,6 @@ const getLocalIP = () => {
   }
   return 'localhost';
 };
-
 
 // Start server
 server.listen(PORT, () => {

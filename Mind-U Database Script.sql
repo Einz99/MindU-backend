@@ -16,10 +16,16 @@ SELECT * FROM staffs;
 SELECT * FROM announcements;
 SELECT * FROM resources;
 SELECT * FROM ActivityLog;
-SELECT * FROM backlogs;
+SELECT * FROM backlogs WHERE student_id = 46;
 SELECT * FROM mood_data;
 SELECT * FROM students_login;
 SELECT * FROM StudentActivityLog;
+
+UPDATE students
+SET isAskingHelp = 0
+WHERE id = 46;
+TRUNCATE TABLE chatbot_history;
+TRUNCATE TABLE office_chat;
 
 #SHOW TABLES
 SHOW TABLES;
@@ -94,6 +100,7 @@ CREATE TABLE backlogs (
     isStaffRequest BOOL,
     staff_id INT NULL,
     comment TEXT,
+    message TEXT,
     name VARCHAR(255),
     sched_date DATETIME DEFAULT NULL,
     time_request DATETIME DEFAULT NULL,
@@ -141,6 +148,10 @@ CREATE TABLE office_chat (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+
+SELECT * FROM chatbot_history;
+SELECT * FROM office_chat;
+
 CREATE TABLE students_login(
 	id INT AUTO_INCREMENT PRIMARY KEY NOT NULL,
     student_id INT,
@@ -169,12 +180,12 @@ CREATE TABLE pets (
     FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
     pet_name VARCHAR(255) NOT NULL,
     pet_type ENUM('cat_1', 'cat_2', 'cat_3', 'dog_1', 'dog_2', 'dog_3') NOT NULL,
-    coins INT NOT NULL DEFAULT 20,  -- Starting coins
+    coins INT NOT NULL DEFAULT 100,  -- Starting coins
     food_stack INT DEFAULT 5,  -- Starting food
-    hygiene_stack INT DEFAULT 5,  -- Starting hygiene tools
-    pet_head INT DEFAULT NULL,  -- Accessory ID for pet's head (NULL means no accessory)
-    pet_neck INT DEFAULT NULL,  -- Accessory ID for pet's neck
-    pet_eyes INT DEFAULT NULL,  -- Accessory ID for pet's eyes
+    pet_head INT DEFAULT NULL,  -- Accessory ID for pet's head (NULL means no accessory) 1-4
+    pet_neck INT DEFAULT NULL,  -- Accessory ID for pet's neck 5-8
+    pet_neck INT DEFAULT NULL,  -- Accessory ID for pet's neck 5-8
+    pet_eyes INT DEFAULT NULL,  -- Accessory ID for pet's eyes 9-12
     hunger INT DEFAULT 70,  -- Pet's hunger level (0-100)
     playfulness INT DEFAULT 70,  -- Pet's playfulness level (0-100)
     hygiene INT DEFAULT 70,  -- Pet's hygiene level (0-100)
@@ -182,6 +193,8 @@ CREATE TABLE pets (
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+
 
 CREATE TABLE pet_logins (
     pet_id INT NOT NULL,
@@ -191,32 +204,64 @@ CREATE TABLE pet_logins (
     FOREIGN KEY (pet_id) REFERENCES pets(id) ON DELETE CASCADE
 );
 
-CREATE TABLE pet_items (
+CREATE TABLE pet_toys (
     pet_id INT NOT NULL,
-    item_id INT NOT NULL,  -- In-game item ID (1 for food, 2 for hygiene, etc.)
-    quantity INT NOT NULL DEFAULT 1,  -- Quantity of the item
-    PRIMARY KEY (pet_id, item_id),
+    toy_type ENUM('toy_1', 'toy_2', 'toy_3', 'toy_4', 'toy_5', 'toy_6') NOT NULL,  -- Six different toys
+    is_active BOOLEAN DEFAULT FALSE,  -- Whether this toy is the one currently being used
+    PRIMARY KEY (pet_id, toy_type),
     FOREIGN KEY (pet_id) REFERENCES pets(id) ON DELETE CASCADE
 );
 
 CREATE TABLE pet_accessories (
     pet_id INT NOT NULL,
-    accessory_id INT NOT NULL,  -- In-game accessory ID
+    accessory_id INT, -- Head 1-4, Eyes 5-8, Collars 9-12
+    accessory_category ENUM('hat', 'collar', 'glasses') NOT NULL,  -- Accessory category
     PRIMARY KEY (pet_id, accessory_id),
     FOREIGN KEY (pet_id) REFERENCES pets(id) ON DELETE CASCADE
 );
 
-DROP TABLE pet_logins;
-DROP TABLE pet_items;
-DROP TABLE pet_accessories;
-DROP TABLE pets;
-
+CREATE TABLE pet_bath_soap (
+    pet_id INT NOT NULL,
+    soap_type VARCHAR(255) NOT NULL,  -- Different types of soaps
+    quantity INT NOT NULL DEFAULT 5,  -- Quantity of soap
+    is_in_use BOOLEAN DEFAULT FALSE,  -- Whether this soap is being used
+    PRIMARY KEY (pet_id, soap_type),
+    FOREIGN KEY (pet_id) REFERENCES pets(id) ON DELETE CASCADE
+);
 
 # initial staff and super super admin
 INSERT INTO staffs (name, email, password, passwordLength, position)
 VALUES ('Mind-U','fssv.mindu@gmail.com', '1234567890', 10, 'Admin');
 
 # New Tables and Alterations
+
+CREATE TABLE pet_toys (
+    pet_id INT NOT NULL,
+    toy_type ENUM('toy_1', 'toy_2', 'toy_3', 'toy_4', 'toy_5', 'toy_6') NOT NULL,  -- Six different toys
+    is_active BOOLEAN DEFAULT FALSE,  -- Whether this toy is the one currently being used
+    PRIMARY KEY (pet_id, toy_type),
+    FOREIGN KEY (pet_id) REFERENCES pets(id) ON DELETE CASCADE
+);
+
+CREATE TABLE pet_accessories (
+    pet_id INT NOT NULL,
+    accessory_category ENUM('hat', 'collar', 'glasses') NOT NULL,  -- Accessory category
+    accessory_type VARCHAR(255) NOT NULL,  -- Specific type of the accessory (e.g., 'red hat', 'leather collar', etc.)
+    PRIMARY KEY (pet_id, accessory_category, accessory_type),
+    FOREIGN KEY (pet_id) REFERENCES pets(id) ON DELETE CASCADE
+);
+
+CREATE TABLE pet_bath_soap (
+    pet_id INT NOT NULL,
+    soap_type VARCHAR(255) NOT NULL,  -- Different types of soaps
+    quantity INT NOT NULL DEFAULT 0,  -- Quantity of soap
+    is_in_use BOOLEAN DEFAULT FALSE,  -- Whether this soap is being used
+    PRIMARY KEY (pet_id, soap_type),
+    FOREIGN KEY (pet_id) REFERENCES pets(id) ON DELETE CASCADE
+);
+
+
+# Not sure if this is already added so just to be safe I will check
 
 CREATE TABLE students_login(
 	id INT AUTO_INCREMENT PRIMARY KEY NOT NULL,
@@ -278,7 +323,7 @@ CREATE TABLE pets (
     FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
     pet_name VARCHAR(255) NOT NULL,
     pet_type ENUM('cat_1', 'cat_2', 'cat_3', 'dog_1', 'dog_2', 'dog_3') NOT NULL,
-    coins INT NOT NULL DEFAULT 20,  -- Starting coins
+    coins INT NOT NULL DEFAULT 100,  -- Starting coins
     food_stack INT DEFAULT 5,  -- Starting food
     hygiene_stack INT DEFAULT 5,  -- Starting hygiene tools
     pet_head INT DEFAULT NULL,  -- Accessory ID for pet's head (NULL means no accessory)
@@ -301,19 +346,5 @@ CREATE TABLE pet_logins (
     FOREIGN KEY (pet_id) REFERENCES pets(id) ON DELETE CASCADE
 );
 
--- 3. pet_items Table
-CREATE TABLE pet_items (
-    pet_id INT NOT NULL,
-    item_id INT NOT NULL,  -- In-game item ID (1 for food, 2 for hygiene, etc.)
-    quantity INT NOT NULL DEFAULT 1,  -- Quantity of the item
-    PRIMARY KEY (pet_id, item_id),
-    FOREIGN KEY (pet_id) REFERENCES pets(id) ON DELETE CASCADE
-);
-
--- 4. pet_accessories Table
-CREATE TABLE pet_accessories (
-    pet_id INT NOT NULL,
-    accessory_id INT NOT NULL,  -- In-game accessory ID
-    PRIMARY KEY (pet_id, accessory_id),
-    FOREIGN KEY (pet_id) REFERENCES pets(id) ON DELETE CASCADE
-);
+ALTER TABLE backlogs
+ADD COLUMN message TEXT;

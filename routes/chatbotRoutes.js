@@ -5,11 +5,11 @@ const chatbotController = require('../controllers/chatbotController');
 
 // Route to handle sending messages to Dialogflow
 router.post('/send-message', chatbotController.sendMessage);
+router.post('/insert-chat-message', chatbotController.insertChatMessage);
 router.get('/get-conversation/:userId', chatbotController.getConversation);
 router.get('/students-asking-for-help', chatbotController.getStudentAFH)
 router.put('/get-help/:userId', chatbotController.getHelp);
 router.put('/updateStatus/:userId', chatbotController.updateStatus);
-router.post('/insert-chat-message', chatbotController.insertChatMessage);
 router.get('/get-office-chat-history/:userId', chatbotController.getOfficeChatConversation);
 
 module.exports = router;

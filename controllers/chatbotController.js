@@ -230,9 +230,15 @@ exports.insertChatMessage = async (req, res) => {
     // Call the service to insert message into office_chat with dynamic is_from_office
     await chatbotService.insertChatMessage(student_id, message, is_from_office);
 
-    // Emit event to notify all connected clients about the new chat message
+    // Emit event to notify the correct room (based on sender)
     if (req.io) {
-      req.io.emit('new-chat-message', { student_id, message, is_from_office });
+      if (is_from_office) {
+        // If message is from the office (agent), emit to the student's room
+        req.io.to(student_id).emit('new-chat-message', { student_id, message, is_from_office });
+      } else {
+        // If message is from the student, emit to the agent's room
+        req.io.to(`agent-${student_id}`).emit('new-chat-message', { student_id, message, is_from_office });
+      }
       console.log('Emitted new-chat-message event');
     }
 

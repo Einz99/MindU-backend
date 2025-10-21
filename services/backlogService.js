@@ -11,12 +11,14 @@ const path = require("path");
 exports.createBacklog = async (data) => {
   const query = `
     INSERT INTO backlogs 
-      (student_id, name, message, sched_date, status, created_at, modified_at, completed_at)
-    VALUES ( ?, ?, ?, ?, ?, NOW(), NOW(), ?)
+      (student_id, staff_id, isStaffRequest, name, message, sched_date, status, created_at, modified_at, completed_at)
+    VALUES ( ?, ?, ?, ?, ?, ?, ?, NOW(), NOW(), ?)
   `;
   const params = [
     data.student_id || null,
+    data.staff_id || null,
     data.name || null,
+    data.staffRequest ? data.staffRequest : null,
     data.message || null,
     data.sched_date || null,
     data.status,
