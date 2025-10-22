@@ -237,11 +237,6 @@ exports.getToy = async (req, res) => {
   const petId = req.params.id;  // Pet ID from the URL parameter
 
   try {
-    // Validate input
-    if (!toy_type) {
-      return res.status(400).json({ message: "Missing required field: toy_type" });
-    }
-
     // Call the service to get the toy's details
     const toy = await petService.getToy(petId);
 

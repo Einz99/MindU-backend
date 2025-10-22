@@ -212,7 +212,6 @@ CREATE TABLE pet_logins (
 CREATE TABLE pet_toys (
     pet_id INT NOT NULL,
     toy_type ENUM('toy_1', 'toy_2', 'toy_3', 'toy_4', 'toy_5', 'toy_6') NOT NULL,  -- Six different toys
-    is_active BOOLEAN DEFAULT FALSE,  -- Whether this toy is the one currently being used
     PRIMARY KEY (pet_id, toy_type),
     FOREIGN KEY (pet_id) REFERENCES pets(id) ON DELETE CASCADE
 );

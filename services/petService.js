@@ -303,18 +303,10 @@ exports.addToy = async (petId, toyType) => {
   
   await db.query(updateCoinsQuery, [newCoins, petId]);
 
-  // Deactivate any active toy before setting the new one as active
-  const deactivateQuery = `
-    UPDATE pet_toys
-    SET is_active = FALSE
-    WHERE pet_id = ? AND is_active = TRUE
-  `;
-  await db.query(deactivateQuery, [petId]);
-
   // Insert the new toy and set it as active
   const insertToyQuery = `
-    INSERT INTO pet_toys (pet_id, toy_type, is_active)
-    VALUES (?, ?, TRUE)
+    INSERT INTO pet_toys (pet_id, toy_type)
+    VALUES (?, ?)
   `;
   await db.query(insertToyQuery, [petId, toyType]);
 
@@ -323,7 +315,6 @@ exports.addToy = async (petId, toyType) => {
     pet_id: petId,
     toy_type: toyType,
     new_coins: newCoins,
-    is_active: true
   };
 };
 
