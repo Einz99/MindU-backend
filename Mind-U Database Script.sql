@@ -16,7 +16,7 @@ SELECT * FROM staffs;
 SELECT * FROM announcements;
 SELECT * FROM resources;
 SELECT * FROM ActivityLog;
-SELECT * FROM backlogs WHERE student_id = 46;
+SELECT * FROM backlogs;
 SELECT * FROM mood_data;
 SELECT * FROM students_login;
 SELECT * FROM StudentActivityLog;

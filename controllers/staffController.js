@@ -186,7 +186,12 @@ exports.updateStaffPicture = async (req, res) => {
     if (!updated) {
       return res.status(404).json({ message: "Staff not found" });
     }
-    return res.status(200).json({ message: "Staff picture updated successfully" });
+    return res.status(200).json({
+      message: "Staff picture updated successfully",
+      data: {
+        picturePath: picture, // Return only the relative filename/path
+      },
+    });
   } catch (error) {
     console.error("Error updating staff picture:", error);
     return res.status(500).json({ message: "Server error", error: error.message });

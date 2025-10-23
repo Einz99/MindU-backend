@@ -115,7 +115,14 @@ exports.updateStaffPicture = async (id, newPictureFilename) => {
     });
   }
 
-  return result.affectedRows;
+  // Return the full path of the newly updated picture
+  if (result.affectedRows > 0) {
+    // Assuming RootAPI is the base URL of your server
+    const picturePath = `${newPictureFilename}`;
+    return picturePath;
+  }
+
+  return null; // If no rows were updated, return null
 };
 
 exports.getStaffByEmail = async (email) => {

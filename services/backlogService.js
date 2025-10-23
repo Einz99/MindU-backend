@@ -18,7 +18,7 @@ exports.createBacklog = async (data) => {
     data.student_id || null,
     data.staff_id || null,
     data.name || null,
-    data.staffRequest ? data.staffRequest : null,
+    data.staffRequest || false,
     data.message || null,
     data.sched_date || null,
     data.status,
