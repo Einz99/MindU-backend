@@ -7,6 +7,8 @@ const http = require("http");
 const { Server } = require("socket.io");
 require('./jobs');
 const os = require("os");
+const cron = require('node-cron');
+const db = require('./db');
 
 const app = express();
 const PORT = process.env.PORT;
@@ -298,27 +300,57 @@ app.get('/test', (req, res) => {
     res.send('Connected successfully');
 });
 
-app.post('/toggle-pet-sleep', async (req, res) => {
-    const { petId, isSleeping } = req.body;
+let sleepingPets = {};  
 
+app.post('/toggle-pet-sleep', async (req, res) => {
+    const { petId, isSleep } = req.body;
     try {
-        console.log(`Received sleep status update for pet ${petId}: ${isSleeping ? "Sleeping" : "Awake"}`);
+        console.log(`Received sleep status update for pet ${petId}: ${isSleep ? "Sleeping" : "Awake"}`);
 
         // Update the pet's sleep state in memory or database
-        if (isSleeping) {
+        if (isSleep) {
             // Add to sleepingPets in memory
             sleepingPets[petId] = true;
         } else {
             // Remove from sleepingPets in memory
             delete sleepingPets[petId];
         }
-
         // Respond back to Unity
         res.status(200).send({ message: 'Sleep status updated successfully' });
     } catch (error) {
         console.error('Error updating sleep status:', error.message);
         res.status(500).send({ message: 'Error updating sleep status' });
     }
+});
+
+cron.schedule('*/10 * * * *', async () => {
+  const currentTime = new Date();
+  const minutes = currentTime.getMinutes();
+  if (minutes % 10 === 0) {
+    try {
+      // First query: Decrement sleep for pets not in sleepingPets
+      const sleepingPetIds = Object.keys(sleepingPets);  // Get all pet IDs from sleepingPets
+      const sleepingPetIdsList = sleepingPetIds.length > 0 ? sleepingPetIds.join(', ') : 'NULL'; // Use NULL if no sleepingPets
+
+      // Second query: Add sleep for pets in sleepingPets
+      if (sleepingPetIds.length > 0) {
+        await db.query(`
+          UPDATE pets
+          SET sleep = GREATEST(sleep + 7, 0)
+          WHERE id IN (${sleepingPetIds.join(', ')})`);
+      }
+
+      await db.query(`
+        UPDATE pets
+        SET sleep = GREATEST(sleep - 5, 0)
+        WHERE id NOT IN (${sleepingPetIdsList})`);
+
+      
+
+    } catch (error) {
+      console.error("Error updating sleep times:", error);
+    }
+  }
 });
 
 const getLocalIP = () => {

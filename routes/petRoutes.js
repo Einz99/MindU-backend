@@ -14,10 +14,12 @@ router.post('/', petController.insertPet);
 router.put('/:id/food', petController.addFood);
 router.put('/:id/foodeat', petController.eatFood);
 router.put('/:id/soap', petController.addSoap);
+router.put('/:id/soap/active', petController.setActiveSoap);
 router.put('/:id/soapuse', petController.useSoap);
 router.put('/:id/buyToy', petController.addToy);
 router.put('/:petId/buyAccessory', petController.buyAccessory);
 router.put('/:petId/accessory', petController.updateAccessory);
 router.put('/:id/useToy', petController.updateToy);
+router.put('/:id/addPlay', petController.updatePlay);
 
 module.exports = router;

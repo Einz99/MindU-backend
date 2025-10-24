@@ -46,38 +46,53 @@ exports.insertDefaultSoap = async (petId) => {
   await db.query(query, [petId]);
 };
 
-// Service method to add food and update coins
-exports.addFood = async (petId, increment) => {
+exports.addFood = async (petId, increments) => {
   // Query to fetch the current food quantity and coins
   const [currentPet] = await db.query(`
-    SELECT food_quantity, coins FROM pets WHERE id = ?
+    SELECT food_stack, coins FROM pets WHERE id = ?
   `, [petId]);
 
   // Check if pet exists
-  if (!currentPet) {
+  if (!currentPet || currentPet.length === 0) {
     throw new Error('Pet not found');
   }
 
-  // Calculate the new food quantity
-  const newFoodQuantity = currentPet.food_quantity + increment;
+  // Get the current food stack and coins, making sure they're valid numbers
+  let currentFoodStack = currentPet[0].food_stack || 0;  // Default to 0 if it's null
+  let currentCoins = currentPet[0].coins || 0;  // Default to 0 if it's null
 
-  // Deduct coins based on the increment value
-  let coinDeduction = 0;
-  if (increment === 1) {
-    coinDeduction = 10; // Deduct 10 coins for 1 food
-  } else if (increment === 5) {
-    coinDeduction = 35; // Deduct 35 coins for 5 food
-  } else {
+  console.log("Current Food Stack: ", currentFoodStack);
+  console.log("Current Coins: ", currentCoins);
+  console.log("Increment: ", increments);
+
+  // Validate the increment value
+  if (increments !== 1 && increments !== 5) {
     throw new Error('Invalid increment for food. Only 1 or 5 is allowed.');
   }
 
+  // Calculate the new food quantity
+  const newFoodQuantity = currentFoodStack + increments;
+
+  // Deduct coins based on the increment value
+  let coinDeduction = 0;
+  if (increments === 1) {
+    coinDeduction = 10; // Deduct 10 coins for 1 food
+  } else if (increments === 5) {
+    coinDeduction = 35; // Deduct 35 coins for 5 food
+  }
+
   // Calculate the new coin balance
-  const newCoins = currentPet.coins - coinDeduction;
+  const newCoins = currentCoins - coinDeduction;
+
+  // Check if the new values are valid numbers (to prevent NaN)
+  if (isNaN(newFoodQuantity) || isNaN(newCoins)) {
+    throw new Error("Invalid calculation for food quantity or coins.");
+  }
 
   // Query to update the pet's food quantity and coins
   const query = `
     UPDATE pets
-    SET food_quantity = ?, coins = ?
+    SET food_stack = ?, coins = ?
     WHERE id = ?
   `;
   
@@ -95,7 +110,7 @@ exports.addFood = async (petId, increment) => {
 exports.eatFood = async (petId) => {
   // Query to fetch the current food quantity and hunger
   const [currentPet] = await db.query(`
-    SELECT food_quantity, hunger FROM pets WHERE id = ?
+    SELECT food_stack, hunger FROM pets WHERE id = ?
   `, [petId]);
 
   if (!currentPet || currentPet.length === 0) {
@@ -105,12 +120,12 @@ exports.eatFood = async (petId) => {
   const petData = currentPet[0]; // Access the first pet data object
 
   // Ensure food quantity is greater than 0 before feeding
-  if (petData.food_quantity <= 0) {
+  if (petData.food_stack <= 0) {
     throw new Error('Pet does not have enough food');
   }
 
   // Calculate the new food quantity (decrement by 1)
-  const newFoodQuantity = petData.food_quantity - 1;
+  const newFoodQuantity = petData.food_stack - 1;
 
   // Calculate new hunger value
   let newHungerQuantity = petData.hunger + 30; // Increase hunger by 30
@@ -128,7 +143,7 @@ exports.eatFood = async (petId) => {
   // Query to update the pet's food quantity and hunger
   const query = `
     UPDATE pets
-    SET food_quantity = ?, hunger = ?
+    SET food_stack = ?, hunger = ?
     WHERE id = ?
   `;
   
@@ -154,7 +169,7 @@ exports.getSoap = async (petId) => {
       return null; // No soap data found
     }
 
-    return soapData[0]; // Return soap type and quantity
+    return soapData; // Return all soap data
   } catch (error) {
     console.error("Error getting soap data:", error);
     throw new Error('Unable to fetch soap data');
@@ -163,11 +178,6 @@ exports.getSoap = async (petId) => {
 
 // Service method to add or update soap and update coins
 exports.addSoap = async (petId, soapType) => {
-  // Check if the pet already has this type of soap
-  const [existingSoap] = await db.query(`
-    SELECT * FROM pet_bath_soap WHERE pet_id = ? AND soap_type = ?
-  `, [petId, soapType]);
-
   // Determine the coin deduction based on the soap type
   let coinDeduction = 0;
   switch (soapType) {
@@ -187,6 +197,10 @@ exports.addSoap = async (petId, soapType) => {
       throw new Error('Invalid soap type.');
   }
 
+  const [existingSoap] = await db.query(`
+    SELECT * FROM pet_bath_soap WHERE pet_id = ? AND soap_type = ?
+  `, [petId, soapType]);
+
   // Get the current pet data
   const [currentPet] = await db.query(`
     SELECT coins FROM pets WHERE id = ?
@@ -197,11 +211,13 @@ exports.addSoap = async (petId, soapType) => {
     throw new Error('Pet not found');
   }
 
-  const newCoins = currentPet.coins - coinDeduction;
+  const newCoins = currentPet[0].coins - coinDeduction;
 
   // If the soap type already exists for the pet, update it
   if (existingSoap.length > 0) {
-    const newQuantity = existingSoap.quantity + 3;  // Add 3 to the existing quantity
+    // Safely get the existing quantity and add 3 to it, defaulting to 0 if not found
+    const existingQuantity = existingSoap[0].quantity || 0; // Ensure it's a valid number
+    const newQuantity = existingQuantity + 3;  // Add 3 to the existing quantity
     
     // Update the soap's quantity and set it as active if not already
     const query = `
@@ -330,7 +346,7 @@ exports.getToy = async (petId) => {
   }
 
   // Return the toy details
-  return toy[0];  // Return the first result (since pet_id and toy_type are unique for each pet)
+  return toy;  // Return the first result (since pet_id and toy_type are unique for each pet)
 };
 
 // Service method to update the toy for a specific pet
@@ -368,4 +384,80 @@ exports.getAccessories = async (petId) => {
   const [rows] = await db.query(query, [petId]);
 
   return rows;
+};
+
+exports.addPlay = async (petId, increment) => {
+  // Validate the increment value
+  if (isNaN(increment) || increment === null || increment === undefined) {
+    throw new Error("Invalid increment value");
+  }
+
+  // Fetch the current playfulness from the database
+  const selectQuery = `
+    SELECT playfulness
+    FROM pets
+    WHERE id = ?;
+  `;
+  const [result] = await db.query(selectQuery, [petId]);
+
+  if (result.length === 0) {
+    throw new Error("Pet not found");
+  }
+
+  // Get the current playfulness value (default to 0 if it's null)
+  let currentPlayfulness = result[0].playfulness || 0;
+
+  // Add the increment to the current playfulness
+  currentPlayfulness += increment;
+
+  if (currentPlayfulness >= 100) {
+    currentPlayfulness = 100;
+  }
+
+  // Update the playfulness value in the database
+  const updateQuery = `
+    UPDATE pets
+    SET playfulness = ?
+    WHERE id = ?;
+  `;
+
+  const [updateResult] = await db.query(updateQuery, [currentPlayfulness, petId]);
+
+  return updateResult;
+}
+
+exports.setActiveSoap = async (petId, soapType) => {
+  // First, set all soaps for this pet to not in use
+  await db.query(`
+    UPDATE pet_bath_soap
+    SET is_in_use = FALSE
+    WHERE pet_id = ?
+  `, [petId]);
+
+  // Check if the soap type exists for this pet
+  const [existingSoap] = await db.query(`
+    SELECT * FROM pet_bath_soap WHERE pet_id = ? AND soap_type = ?
+  `, [petId, soapType]);
+
+  if (existingSoap.length > 0) {
+    // If it exists, set it as active
+    await db.query(`
+      UPDATE pet_bath_soap
+      SET is_in_use = TRUE
+      WHERE pet_id = ? AND soap_type = ?
+    `, [petId, soapType]);
+  } else {
+    // If it doesn't exist, create it with quantity 0 and set as active
+    await db.query(`
+      INSERT INTO pet_bath_soap (pet_id, soap_type, quantity, is_in_use)
+      VALUES (?, ?, 0, TRUE)
+    `, [petId, soapType]);
+  }
+
+  return {
+    pet_id: petId,
+    soap_type: soapType,
+    is_in_use: true,
+    message: 'Active soap updated successfully'
+  };
 };

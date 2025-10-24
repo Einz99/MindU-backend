@@ -1,4 +1,5 @@
 const petService = require("../services/petService");
+const db = require('../db');
 
 // Controller to get pet by student_id
 exports.getPetByStudentId = async (req, res) => {
@@ -57,16 +58,16 @@ exports.insertPet = async (req, res) => {
 
 exports.addFood = async (req, res) => {
   const petId = req.params.id;  // Pet ID from the URL parameter
-  const { increment } = req.body;  // Food increment value (1 or 5)
+  const { increments } = req.body;  // Food increment value (1 or 5)
 
   try {
     // Validate the increment value
-    if (increment !== 1 && increment !== 5) {
+    if (increments !== 1 && increments !== 5) {
       return res.status(400).json({ message: "Invalid increment. Only 1 or 5 is allowed." });
     }
 
     // Call the service to update the pet's food quantity
-    const updatedPet = await petService.addFood(petId, increment);
+    const updatedPet = await petService.addFood(petId, increments);
 
     // Return the updated pet data
     return res.status(200).json(updatedPet);
@@ -99,12 +100,12 @@ exports.getSoap = async (req, res) => {
     // Call service to get soap type and quantity for the pet
     const soapData = await petService.getSoap(petId);
 
-    // If no soap data exists, return soap_type as null and quantity as 0
-    if (!soapData) {
-      return res.json({ soap_type: null, quantity: 0 });
+    // If no soap data exists, return an empty array
+    if (!soapData || soapData.length === 0) {
+      return res.json([]); // Return an empty array if no soap found
     }
 
-    // Return soap type and quantity
+    // Return the list of soap types and quantities
     return res.status(200).json(soapData);
   } catch (error) {
     console.error("Error fetching soap data:", error);
@@ -235,7 +236,7 @@ exports.addToy = async (req, res) => {
 // Controller method to get the toy for a specific pet
 exports.getToy = async (req, res) => {
   const petId = req.params.id;  // Pet ID from the URL parameter
-
+  console.log("accessing get toy");
   try {
     // Call the service to get the toy's details
     const toy = await petService.getToy(petId);
@@ -357,20 +358,30 @@ exports.buyAccessory = async (req, res) => {
 exports.updateAccessory = async (req, res) => {
   const petId = req.params.petId;
   const { accessory_id, accessory_category } = req.body;
-
+  console.log("accessing update of accessories");
+  
   // Validate input
-  if (!accessory_id || !accessory_category) {
+  if (accessory_id === undefined || !accessory_category) {
     return res.status(400).json({ message: "Missing required fields: accessory_id or accessory_category" });
   }
 
   let updateField = '';
   let newValue = null;
 
-  // Determine the field to update and the new value based on accessory_id and accessory_category
+  // Determine the field to update based on accessory_category
   if (accessory_id === 0) {
     newValue = null; // Set to null if accessory_id is 0
+    if (accessory_category === 'hat') {
+      updateField = 'pet_head';
+    } else if (accessory_category === 'glasses') {
+      updateField = 'pet_eyes';
+    } else if (accessory_category === 'collar') {
+      updateField = 'pet_neck';
+    } else {
+      return res.status(400).json({ message: "Invalid accessory_category" });
+    }
   } else {
-    // Based on accessory_category, set the correct field
+    // Validate accessory_id ranges
     if (accessory_category === 'hat' && accessory_id >= 1 && accessory_id <= 4) {
       updateField = 'pet_head';
       newValue = accessory_id;
@@ -386,20 +397,58 @@ exports.updateAccessory = async (req, res) => {
   }
 
   // Prepare SQL query to update the accessory
-  const query = `
-    UPDATE pets 
-    SET ${updateField} = ?
-    WHERE id = ?
-  `;
+  const query = `UPDATE pets SET ${updateField} = ? WHERE id = ?`;
 
   try {
     // Execute the update query
     await db.query(query, [newValue, petId]);
 
     // Return success response
-    return res.status(200).json({ message: `Accessory updated successfully` });
+    return res.status(200).json({ 
+      message: `Accessory updated successfully`,
+      pet_id: petId,
+      field: updateField,
+      value: newValue
+    });
   } catch (error) {
     console.error("Error updating accessory:", error);
     return res.status(500).json({ message: "Internal Server Error" });
+  }
+};
+
+exports.updatePlay = async (req, res) => {
+  const petId = req.params.id;  // Correctly use `req` first, then `res`
+  const { increment } = req.body;
+
+  try {
+    // Call the service to update playfulness
+    const updatedPet = await petService.addPlay(petId, increment);
+
+    // Return the updated pet data
+    return res.status(200).json(updatedPet);
+  } catch (error) {
+    console.error("Error updating playfulness:", error);
+    return res.status(500).json({ message: "Server error", error: error.message });
+  }
+}
+
+exports.setActiveSoap = async (req, res) => {
+  const petId = req.params.id;
+  const { soap_type } = req.body;
+
+  try {
+    // Validate input
+    if (!soap_type) {
+      return res.status(400).json({ message: "Missing required field: soap_type" });
+    }
+
+    // Call the service to set the active soap
+    const result = await petService.setActiveSoap(petId, soap_type);
+
+    // Return success response
+    return res.status(200).json(result);
+  } catch (error) {
+    console.error("Error setting active soap:", error);
+    return res.status(500).json({ message: "Server error", error: error.message });
   }
 };

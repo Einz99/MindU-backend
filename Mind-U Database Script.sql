@@ -63,6 +63,7 @@ CREATE TABLE staffs (
     modified_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+SELECT * FROM staffs;
 
 # initial staff and super super admin
 INSERT INTO staffs (name, email, password, passwordLength, position)
@@ -199,7 +200,15 @@ CREATE TABLE pets (
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+SELECT * FROM pets;
 
+UPDATE pets
+SET coins = 1000
+WHERE id = 2;
+SELECT * FROM pets;
+
+DELETE FROM pets
+WHERE student_id = 46;
 
 CREATE TABLE pet_logins (
     pet_id INT NOT NULL,
@@ -212,9 +221,15 @@ CREATE TABLE pet_logins (
 CREATE TABLE pet_toys (
     pet_id INT NOT NULL,
     toy_type ENUM('toy_1', 'toy_2', 'toy_3', 'toy_4', 'toy_5', 'toy_6') NOT NULL,  -- Six different toys
+    is_active BOOL DEFAULT TRUE,
     PRIMARY KEY (pet_id, toy_type),
     FOREIGN KEY (pet_id) REFERENCES pets(id) ON DELETE CASCADE
 );
+
+INSERT pet_toys (pet_id, toy_type)
+VALUES (2, 'toy_2');
+
+SELECT * FROM pet_toys;
 
 CREATE TABLE pet_accessories (
     pet_id INT NOT NULL,
@@ -224,14 +239,19 @@ CREATE TABLE pet_accessories (
     FOREIGN KEY (pet_id) REFERENCES pets(id) ON DELETE CASCADE
 );
 
+SELECT * FROM pet_accessories;
+
+TRUNCATE TABLE pet_accessories;
+
 CREATE TABLE pet_bath_soap (
     pet_id INT NOT NULL,
     soap_type VARCHAR(255) NOT NULL,  -- Different types of soaps
-    quantity INT NOT NULL DEFAULT 5,  -- Quantity of soap
-    is_in_use BOOLEAN DEFAULT FALSE,  -- Whether this soap is being used
+    quantity INT NOT NULL DEFAULT 1,  -- Quantity of soap
     PRIMARY KEY (pet_id, soap_type),
     FOREIGN KEY (pet_id) REFERENCES pets(id) ON DELETE CASCADE
 );
+
+SELECT * FROM pet_bath_soap;
 
 # New Tables and Alterations
 
