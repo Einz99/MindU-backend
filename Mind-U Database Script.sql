@@ -2,13 +2,17 @@ CREATE DATABASE MindU;
 USE MindU;
 
 #DROPPING DATABASE AND TABLES
-DROP DATABASE MindU;
-DROP TABLE students;
-DROP TABLE staffs;
-DROP TABLE announcements;
-DROP TABLE resources;
-DROP TABLE backlogs;
-DROP TABLE mood_data;
+#DROP DATABASE MindU;
+#DROP TABLE students;
+#DROP TABLE staffs;
+#DROP TABLE announcements;
+#DROP TABLE resources;
+#DROP TABLE backlogs;
+#DROP TABLE mood_data;
+#DROP TABLE students_login;
+#DROP TABLE StudentActivityLog;
+#DROP TABLE chatbot_history;
+#DROP TABLE office_chat
 
 #SELECTING TABLES
 SELECT * FROM students;
@@ -16,19 +20,26 @@ SELECT * FROM staffs;
 SELECT * FROM announcements;
 SELECT * FROM resources;
 SELECT * FROM ActivityLog;
-SELECT * FROM backlogs;
+SELECT * FROM backlogs WHERE student_id = 46;
 SELECT * FROM mood_data;
 SELECT * FROM students_login;
 SELECT * FROM StudentActivityLog;
+SELECT * FROM chatbot_history;
+SELECT * FROM office_chat;
+
+SELECT * FROM students
+WHERE isAskingHelp = true;
 
 UPDATE students
-SET isAskingHelp = 0
-WHERE id = 46;
-TRUNCATE TABLE chatbot_history;
-TRUNCATE TABLE office_chat;
+SET isAskingHelp = false, chatStatus = 'Completed'
+WHERE id = 622;
 
 #SHOW TABLES
 SHOW TABLES;
+
+# initial staff and super super admin
+INSERT INTO staffs (name, email, password, passwordLength, position)
+VALUES ('Mind-U','fssv.mindu@gmail.com', '1234567890', 10, 'Admin');
 
 CREATE TABLE students (
 	id INT AUTO_INCREMENT PRIMARY KEY NOT NULL,
@@ -63,12 +74,6 @@ CREATE TABLE staffs (
     modified_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-SELECT * FROM staffs;
-
-# initial staff and super super admin
-INSERT INTO staffs (name, email, password, passwordLength, position)
-VALUES ('Mind-U','fssv.mindu@gmail.com', '1234567890', 10, 'Admin');
-
 CREATE TABLE announcements (
 	ID INT AUTO_INCREMENT PRIMARY KEY NOT NULL,
     student_id INT,
@@ -96,8 +101,6 @@ CREATE TABLE resources (
     posted_at DATETIME DEFAULT NULL,
     modified_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
-
-SELECT * FROM resources;
 
 CREATE TABLE backlogs (
 	id INT AUTO_INCREMENT PRIMARY KEY NOT NULL,
@@ -135,6 +138,8 @@ CREATE TABLE mood_data (
     modified_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
+DESC mood_data;
+
 CREATE TABLE chatbot_history (
 	chat_id INT AUTO_INCREMENT PRIMARY KEY NOT NULL,
     student_id INT NOT NULL,
@@ -154,10 +159,6 @@ CREATE TABLE office_chat (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
-
-SELECT * FROM chatbot_history;
-SELECT * FROM office_chat;
-
 CREATE TABLE students_login(
 	id INT AUTO_INCREMENT PRIMARY KEY NOT NULL,
     student_id INT,
@@ -169,15 +170,6 @@ CREATE TABLE studentActivityLog(
 	id INT AUTO_INCREMENT PRIMARY KEY NOT NULL,
     module ENUM('Resource', 'Wellness', 'Chatbot', 'Mood', 'Pet') NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL
-);
-
-CREATE TABLE availability (
-	id INT AUTO_INCREMENT PRIMARY KEY NOT NULL,
-	date DATE NOT NULL,
-	time TIME NOT NULL,
-	UNIQUE(date, time), -- Ensure no duplicate combinations of date and time
-	INDEX(date), -- Optional: index for faster queries by date
-	INDEX(time) -- Optional: index for faster queries by time
 );
 
 CREATE TABLE pets (
@@ -202,34 +194,22 @@ CREATE TABLE pets (
 
 SELECT * FROM pets;
 
-UPDATE pets
-SET coins = 1000
-WHERE id = 2;
-SELECT * FROM pets;
+TRUNCATE TABLE pet_toys;
+TRUNCATE TABLE pet_accessories;
+TRUNCATE TABLE pet_bath_soaps;
+TRUNCATE TABLE pets;
 
-DELETE FROM pets
-WHERE student_id = 46;
-
-CREATE TABLE pet_logins (
-    pet_id INT NOT NULL,
-    last_login DATE NOT NULL,
-    daily_bonus INT DEFAULT 0,  -- Bonus granted on login, which can be added to coins
-    PRIMARY KEY (pet_id),
-    FOREIGN KEY (pet_id) REFERENCES pets(id) ON DELETE CASCADE
-);
+SET FOREIGN_KEY_CHECKS = 0;
+TRUNCATE TABLE pets;
+TRUNCATE TABLE pet_logins;  -- Also truncate the child table
+SET FOREIGN_KEY_CHECKS = 1;
 
 CREATE TABLE pet_toys (
     pet_id INT NOT NULL,
     toy_type ENUM('toy_1', 'toy_2', 'toy_3', 'toy_4', 'toy_5', 'toy_6') NOT NULL,  -- Six different toys
-    is_active BOOL DEFAULT TRUE,
     PRIMARY KEY (pet_id, toy_type),
     FOREIGN KEY (pet_id) REFERENCES pets(id) ON DELETE CASCADE
 );
-
-INSERT pet_toys (pet_id, toy_type)
-VALUES (2, 'toy_2');
-
-SELECT * FROM pet_toys;
 
 CREATE TABLE pet_accessories (
     pet_id INT NOT NULL,
@@ -239,14 +219,11 @@ CREATE TABLE pet_accessories (
     FOREIGN KEY (pet_id) REFERENCES pets(id) ON DELETE CASCADE
 );
 
-SELECT * FROM pet_accessories;
-
-TRUNCATE TABLE pet_accessories;
-
 CREATE TABLE pet_bath_soap (
     pet_id INT NOT NULL,
     soap_type VARCHAR(255) NOT NULL,  -- Different types of soaps
-    quantity INT NOT NULL DEFAULT 1,  -- Quantity of soap
+    quantity INT NOT NULL DEFAULT 5,  -- Quantity of soap
+    is_in_use BOOLEAN DEFAULT FALSE,  -- Whether this soap is being used
     PRIMARY KEY (pet_id, soap_type),
     FOREIGN KEY (pet_id) REFERENCES pets(id) ON DELETE CASCADE
 );
@@ -254,117 +231,3 @@ CREATE TABLE pet_bath_soap (
 SELECT * FROM pet_bath_soap;
 
 # New Tables and Alterations
-
-CREATE TABLE pet_toys (
-    pet_id INT NOT NULL,
-    toy_type ENUM('toy_1', 'toy_2', 'toy_3', 'toy_4', 'toy_5', 'toy_6') NOT NULL,  -- Six different toys
-    is_active BOOLEAN DEFAULT FALSE,  -- Whether this toy is the one currently being used
-    PRIMARY KEY (pet_id, toy_type),
-    FOREIGN KEY (pet_id) REFERENCES pets(id) ON DELETE CASCADE
-);
-
-CREATE TABLE pet_accessories (
-    pet_id INT NOT NULL,
-    accessory_category ENUM('hat', 'collar', 'glasses') NOT NULL,  -- Accessory category
-    accessory_type VARCHAR(255) NOT NULL,  -- Specific type of the accessory (e.g., 'red hat', 'leather collar', etc.)
-    PRIMARY KEY (pet_id, accessory_category, accessory_type),
-    FOREIGN KEY (pet_id) REFERENCES pets(id) ON DELETE CASCADE
-);
-
-CREATE TABLE pet_bath_soap (
-    pet_id INT NOT NULL,
-    soap_type VARCHAR(255) NOT NULL,  -- Different types of soaps
-    quantity INT NOT NULL DEFAULT 0,  -- Quantity of soap
-    is_in_use BOOLEAN DEFAULT FALSE,  -- Whether this soap is being used
-    PRIMARY KEY (pet_id, soap_type),
-    FOREIGN KEY (pet_id) REFERENCES pets(id) ON DELETE CASCADE
-);
-
-
-# Not sure if this is already added so just to be safe I will check
-
-CREATE TABLE students_login(
-	id INT AUTO_INCREMENT PRIMARY KEY NOT NULL,
-    student_id INT,
-    FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
-    login_time DATETIME DEFAULT CURRENT_TIMESTAMP 
-);
-
-CREATE TABLE studentActivityLog(
-	id INT AUTO_INCREMENT PRIMARY KEY NOT NULL,
-    module ENUM('Resource', 'Wellness', 'Chatbot', 'Mood', 'Scheduler', 'Pet') NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL
-);
-
-CREATE TABLE chatbot_history (
-	chat_id INT AUTO_INCREMENT PRIMARY KEY NOT NULL,
-    student_id INT NOT NULL,
-    FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
-    is_from_bot BOOL DEFAULT FALSE NOT NULL,
-    is_trigger BOOL DEFAULT FALSE NOT NULL,
-    message TEXT NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE office_chat (
-	chat_id INT AUTO_INCREMENT PRIMARY KEY NOT NULL,
-    student_id INT NOT NULL,
-    FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
-    is_from_office BOOL DEFAULT FALSE NOT NULL,
-    message TEXT NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE availability (
-	id INT AUTO_INCREMENT PRIMARY KEY NOT NULL,
-	date DATE NOT NULL,
-	time TIME NOT NULL,
-	UNIQUE(date, time), -- Ensure no duplicate combinations of date and time
-	INDEX(date), -- Optional: index for faster queries by date
-	INDEX(time) -- Optional: index for faster queries by time
-);
-
-DROP TABLE chatbot_history;
-
-ALTER TABLE chatbot_history
-ADD COLUMN is_trigger BOOL DEFAULT FALSE NOT NULL,
-DROP COLUMN is_agent;
-
-ALTER TABLE students
-ADD COLUMN isAskingHelp BOOLEAN DEFAULT FALSE;
-
-ALTER TABLE students
-ADD COLUMN chatStatus ENUM('Pending', 'On-going', 'Completed') DEFAULT 'Completed';
-
--- 1. pets Table
-CREATE TABLE pets (
-    id INT AUTO_INCREMENT PRIMARY KEY NOT NULL,
-    student_id INT NOT NULL,
-    FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
-    pet_name VARCHAR(255) NOT NULL,
-    pet_type ENUM('cat_1', 'cat_2', 'cat_3', 'dog_1', 'dog_2', 'dog_3') NOT NULL,
-    coins INT NOT NULL DEFAULT 100,  -- Starting coins
-    food_stack INT DEFAULT 5,  -- Starting food
-    hygiene_stack INT DEFAULT 5,  -- Starting hygiene tools
-    pet_head INT DEFAULT NULL,  -- Accessory ID for pet's head (NULL means no accessory)
-    pet_neck INT DEFAULT NULL,  -- Accessory ID for pet's neck
-    pet_eyes INT DEFAULT NULL,  -- Accessory ID for pet's eyes
-    hunger INT DEFAULT 70,  -- Pet's hunger level (0-100)
-    playfulness INT DEFAULT 70,  -- Pet's playfulness level (0-100)
-    hygiene INT DEFAULT 70,  -- Pet's hygiene level (0-100)
-    sleep INT DEFAULT 70,  -- Pet's sleep level (0-100)
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
--- 2. pet_logins Table
-CREATE TABLE pet_logins (
-    pet_id INT NOT NULL,
-    last_login DATE NOT NULL,
-    daily_bonus INT DEFAULT 0,  -- Bonus granted on login, which can be added to coins
-    PRIMARY KEY (pet_id),
-    FOREIGN KEY (pet_id) REFERENCES pets(id) ON DELETE CASCADE
-);
-
-ALTER TABLE backlogs
-ADD COLUMN message TEXT;

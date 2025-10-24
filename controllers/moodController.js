@@ -15,7 +15,6 @@ exports.upsertMood = async (req, res) => {
   try {
     const { student_id, mood } = req.body;
 
-    // Validate input
     if (!student_id || !mood) {
       return res.status(400).json({ message: "Missing required fields: student_id and mood" });
     }
@@ -25,19 +24,26 @@ exports.upsertMood = async (req, res) => {
       return res.status(400).json({ message: `Invalid mood. Valid options are: ${validMoods.join(', ')}` });
     }
 
-    const today = new Date().toLocaleDateString('en-CA'); // Outputs 'YYYY-MM-DD'
+    // 🔍 DEBUG: Log everything
+    const now = new Date();
+    const today = now.toISOString().split('T')[0];
 
-    // Check if there's already a mood record for today
     const existing = await moodServices.getMoodByDate(student_id, today);
-
+    console.log(existing);
     let result;
     if (existing) {
-      // Update existing mood for today
-      await moodServices.updateMood({ student_id, mood, emotion_date: today });
+      await moodServices.updateMood({ 
+        student_id, 
+        mood, 
+        emotion_dated: today
+      });
       result = { message: "Mood updated for today" };
     } else {
-      // Create new mood record
-      await moodServices.createMood({ id: student_id, mood, emotion_dated: today });
+      await moodServices.createMood({ 
+        id: student_id, 
+        mood, 
+        emotion_dated: today 
+      });
       result = { message: "Mood recorded for today" };
     }
 

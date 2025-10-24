@@ -336,7 +336,7 @@ cron.schedule('*/10 * * * *', async () => {
       if (sleepingPetIds.length > 0) {
         await db.query(`
           UPDATE pets
-          SET sleep = GREATEST(sleep + 7, 0)
+          SET sleep = GREATEST(sleep + 17, 0)
           WHERE id IN (${sleepingPetIds.join(', ')})`);
       }
 

@@ -29,12 +29,16 @@ exports.createMood = async (data) => {
 exports.updateMood = async (data) => {
   const query = `
     UPDATE mood_data
-    SET emotion = ?
-    WHERE student_id = ? AND emotion_dated = ?
-  `
-  const [result] = await db.query(query, [data.mood, data.student_id, data.emotion_date])
+    SET emotion = ?, modified_at = NOW()
+  `;
+  
+  const [result] = await db.query(query, [
+    data.mood, 
+    data.student_id, 
+    data.emotion_dated  // Changed from emotion_date
+  ]);
   return result.affectedRows;
-}
+};
 
 exports.getMoodByDate = async (student_id, emotion_date) => {
   const [rows] = await db.query(

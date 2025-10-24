@@ -38,7 +38,8 @@ cron.schedule('*/10 * * * *', async () => {
         SET
           hunger = GREATEST(hunger - 5, 0),  -- Decrease hunger, but not below 0
           hygiene = GREATEST(hygiene - 3, 0), -- Decrease hygiene, but not below 0
-          playfulness = GREATEST(playfulness - 10, 0)
+          playfulness = GREATEST(playfulness - 10, 0),
+          sleep = GREATEST(sleep - 5, 0)
         WHERE student_id IS NOT NULL  -- Ensure it's an actual pet (having student_id)
       `);
 

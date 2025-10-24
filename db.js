@@ -10,6 +10,8 @@ const pool = mysql.createPool({
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
+  timezone: '+08:00',  // ✅ Add this - Manila timezone
+  dateStrings: true,
 });
 
 // No manual connect() is needed when using createPool() with promises
