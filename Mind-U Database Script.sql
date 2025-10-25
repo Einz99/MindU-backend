@@ -31,8 +31,8 @@ SELECT * FROM students
 WHERE isAskingHelp = true;
 
 UPDATE students
-SET isAskingHelp = false, chatStatus = 'Completed'
-WHERE id = 622;
+SET isAskingHelp = true, chatStatus = 'Pending'
+WHERE id = 46;
 
 #SHOW TABLES
 SHOW TABLES;
@@ -159,6 +159,15 @@ CREATE TABLE office_chat (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+SELECT * FROM office_chat;
+
+CREATE TABLE alerts (
+	id INT AUTO_INCREMENT PRIMARY KEY NOT NULL,
+	student_id INT NOT NULL,
+    FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE students_login(
 	id INT AUTO_INCREMENT PRIMARY KEY NOT NULL,
     student_id INT,
@@ -231,3 +240,14 @@ CREATE TABLE pet_bath_soap (
 SELECT * FROM pet_bath_soap;
 
 # New Tables and Alterations
+
+CREATE TABLE alerts (
+	id INT AUTO_INCREMENT PRIMARY KEY NOT NULL,
+	student_id INT NOT NULL,
+    FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
+    is_resolved BOOL DEFAULT FALSE,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+DROP TABLE alerts;
+

@@ -121,11 +121,20 @@ exports.getHelp = async (req, res) => {
 
     await chatbotService.askHelp(userId);
     
+    // Emit real-time update to all connected agents
+    if (req.io) {
+      req.io.emit('new-help-request', {
+        userId,
+        timestamp: new Date()
+      });
+      console.log('Emitted new-help-request event');
+    }
+    
     res.status(200).json({
       success: true,
     })
   } catch (error) {
-    console.error('Error occurred during getHelp:', error); // Debugging error
+    console.error('Error occurred during getHelp:', error);
     res.status(500).json({ 
       error: 'An error occurred while processing your request.',
       success: false
@@ -248,19 +257,117 @@ exports.deactivate = async (req, res) => {
       });
     }
 
-    // Update the status of the student
     await chatbotService.deactivate(userId);
 
-    // Return success response
+    // Emit real-time update when chat is completed
+    if (req.io) {
+      req.io.emit('help-request-completed', {
+        userId,
+        timestamp: new Date()
+      });
+      console.log('Emitted help-request-completed event');
+    }
+
     res.status(200).json({
       success: true,
     });
     
   } catch (error) {
-    console.error('Error occurred during updateStatus:', error); // Debugging error
+    console.error('Error occurred during updateStatus:', error);
     res.status(500).json({ 
       error: 'An error occurred while processing your request.',
       success: false
     });
   }
 }
+
+exports.addAlert = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await chatbotService.addAlert(id);
+
+    if (result.success) {
+      // 🆕 Emit real-time event for new alert
+      if (req.io) {
+        req.io.emit('new-alert-created', {
+          studentId: id,
+          alertId: result.alertId,
+          timestamp: new Date()
+        });
+        console.log('Emitted new-alert-created event');
+      }
+
+      res.status(200).json({
+        success: true,
+        message: result.message,
+        alertId: result.alertId,
+        isFirstAlert: result.isFirstAlert
+      });
+    } else {
+      res.status(429).json({
+        success: false,
+        message: result.message,
+        cooldownRemaining: result.cooldownRemaining
+      });
+    }
+  } catch (error) {
+    console.error('Error occurred during adding of alert:', error);
+    res.status(500).json({
+      error: 'An error occurred while processing your request',
+      success: false
+    });
+  }
+};
+
+exports.getAlert = async (req, res) => {
+  try {
+    const rows = await chatbotService.getAllAlerts();
+    
+    res.status(200).json({
+      success: true,
+      count: rows.length,
+      data: rows
+    });
+    
+  } catch (error) {
+    console.error('Error fetching alerts:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching alerts',
+      error: error.message
+    });
+  }
+};
+
+// Controller
+exports.resolveAll = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const affectedRows = await chatbotService.resolveAllbyStudent(id);
+
+    // 🆕 Emit real-time event for resolved alerts
+    if (req.io) {
+      req.io.emit('alerts-resolved', {
+        studentId: id,
+        affectedRows: affectedRows,
+        timestamp: new Date()
+      });
+      console.log('Emitted alerts-resolved event');
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `Resolved ${affectedRows} alert(s)`,
+      affectedRows: affectedRows
+    });
+  } catch (error) {
+    console.error('error resolving all alerts: ', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error resolving alerts',
+      error: error.message
+    });
+  }
+};

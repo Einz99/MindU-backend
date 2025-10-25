@@ -107,7 +107,7 @@ exports.askHelp = async (userId) => {
   
   const insertQuery = `
     INSERT INTO office_chat (student_id, is_from_office, message)
-    SELECT id, FALSE, 'Requesting a live agent'
+    SELECT id, FALSE, 'Connect to guidance'
     FROM students
     WHERE id = ? AND isAskingHelp = TRUE;
   `;
@@ -187,7 +187,7 @@ exports.updateStatus = async (userId) => {
 exports.deactivate = async (userId) => {
   const updateQuery = `
     UPDATE students
-    SET chatStatus = 'Completed', isAskingHelp = 0,
+    SET chatStatus = 'Completed', isAskingHelp = 0
     WHERE id = ?;
   `;
 
@@ -209,4 +209,99 @@ exports.insertChatMessage = async (student_id, message, is_from_office) => {
     console.error('Error inserting chat message:', error);
     throw error; // Rethrow error to be handled in the controller
   }
+};
+
+exports.addAlert = async (studentId) => {
+  try {
+    // Check if there's any alert from this student
+    const checkQuery = `
+      SELECT id, created_at 
+      FROM alerts 
+      WHERE student_id = ? 
+      ORDER BY created_at DESC 
+      LIMIT 1
+    `;
+    
+    const [existingAlerts] = await db.query(checkQuery, [studentId]);
+    
+    // If this is the first alert, always record it
+    if (!existingAlerts || existingAlerts.length === 0) {
+      const insertQuery = `
+        INSERT INTO alerts (student_id) 
+        VALUES (?)
+      `;
+      
+      const [result] = await db.query(insertQuery, [studentId]);
+      
+      console.log(`✅ First alert recorded for student ${studentId}`);
+      
+      return {
+        success: true,
+        message: 'First alert successfully registered',
+        alertId: result.insertId,
+        isFirstAlert: true
+      };
+    }
+    
+    // If there's an existing alert, check the cooldown
+    const lastAlertTime = new Date(existingAlerts[0].created_at);
+    const currentTime = new Date();
+    const timeDifference = (currentTime - lastAlertTime) / 1000; // Convert to seconds
+    
+    // If less than 60 seconds have passed, don't add new alert
+    if (timeDifference < 60) {
+      console.log(`⏳ Alert cooldown active for student ${studentId}. ${Math.round(60 - timeDifference)}s remaining.`);
+      return {
+        success: false,
+        message: 'Alert cooldown active. Please wait before triggering another alert.',
+        cooldownRemaining: Math.round(60 - timeDifference)
+      };
+    }
+    
+    // If cooldown has passed, insert new alert
+    const insertQuery = `
+      INSERT INTO alerts (student_id) 
+      VALUES (?)
+    `;
+    
+    const [result] = await db.query(insertQuery, [studentId]);
+    
+    console.log(`✅ Alert added for student ${studentId}`);
+    
+    return {
+      success: true,
+      message: 'Alert successfully registered',
+      alertId: result.insertId,
+      isFirstAlert: false
+    };
+    
+  } catch (error) {
+    console.error('Error in addAlert service:', error);
+    throw error;
+  }
+};
+
+exports.getAllAlerts = async () => {
+    const [rows] = await db.query(`
+      SELECT 
+        s.firstName,
+        s.lastName,
+        a.student_id,
+        a.created_at as date
+      FROM alerts a
+      LEFT JOIN students s ON a.student_id = s.id
+      ORDER BY a.created_at DESC
+    `);
+    return rows;
+  }
+
+exports.resolveAllbyStudent = async (id) => {
+  const query = `
+    UPDATE alerts
+    SET is_resolved = true
+    WHERE student_id = ?
+  `; // Remove comma after 'true'
+  const [rows] = await db.query(query, [id]);
+  
+  return rows.affectedRows;
 };
