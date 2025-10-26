@@ -173,28 +173,45 @@ io.on("connection", (socket) => {
     });
   });
 
-  // When agent accepts a chat
+  socket.on('check-agent-in-room', (student_id) => {
+    const roomName = `student-${student_id}`;
+    const hasActiveAgent = activeSessions[student_id]?.staffSockets?.length > 0;
+    
+    socket.emit('agent-room-status', {
+      student_id,
+      hasActiveAgent,
+      agentCount: activeSessions[student_id]?.staffSockets?.length || 0
+    });
+  });
+  
+  // When agent accepts chat, notify OTHER agents
   socket.on('agent-accept-chat', (data) => {
     const { student_id } = data;
     const roomName = `student-${student_id}`;
     
     console.log(`🤝 Agent ${socket.id} accepted chat for student ${student_id}`);
     
-    // Update active session
     if (activeSessions[student_id]) {
       activeSessions[student_id].isAgentAvailable = true;
       if (!activeSessions[student_id].staffSockets.includes(socket.id)) {
         activeSessions[student_id].staffSockets.push(socket.id);
       }
+      
+      // Notify OTHER agents that this chat is now taken
+      activeSessions[student_id].staffSockets.forEach((staffSocketId) => {
+        if (staffSocketId !== socket.id) {
+          io.to(staffSocketId).emit('chat-accepted-by-another-agent', {
+            student_id,
+            acceptedBy: socket.id
+          });
+        }
+      });
     }
     
-    // Notify the student
     io.to(roomName).emit('agent-available', { 
       student_id,
       isAgentAvailable: true 
     });
-    
-    console.log(`✅ Emitted agent-available to room ${roomName}`);
   });
 
   socket.on('agent-disconnecting', (data) => {
