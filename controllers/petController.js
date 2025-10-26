@@ -135,80 +135,25 @@ exports.addSoap = async (req, res) => {
   }
 };
 
-// Controller method to decrease soap quantity when pet uses soap
 exports.useSoap = async (req, res) => {
-  const petId = req.params.id;  // Pet ID from the URL parameter
-  const { soap_type } = req.body;  // Soap type from the request body
+  const petId = req.params.id;
+  const { soap_type } = req.body;
 
   try {
-    // Validate input (soap_type should be provided)
+    // Validate input
     if (!soap_type) {
       return res.status(400).json({ message: "Missing required field: soap_type" });
     }
 
-    // Call the service to decrease the soap quantity and mark it as used
-    const updatedSoap = await petService.useSoap(petId, soap_type);
+    // Call the service to decrease soap and update hygiene
+    const updatedData = await petService.useSoap(petId, soap_type);
 
-    // Return the updated soap data
-    return res.status(200).json(updatedSoap);
+    // Return the updated data
+    return res.status(200).json(updatedData);
   } catch (error) {
     console.error("Error using soap:", error);
     return res.status(500).json({ message: "Server error", error: error.message });
   }
-};
-
-exports.useSoap = async (petId, soapType) => {
-  // Check if the pet already has this type of soap with quantity > 0
-  const [existingSoap] = await db.query(`
-    SELECT * FROM pet_bath_soap WHERE pet_id = ? AND soap_type = ? AND quantity > 0
-  `, [petId, soapType]);
-
-  // If the soap doesn't exist or the quantity is 0, throw an error
-  if (!existingSoap || existingSoap.length === 0) {
-    throw new Error('Soap not found or quantity is 0');
-  }
-
-  // Decrease the soap quantity by 1
-  const newQuantity = existingSoap[0].quantity - 1;
-
-  // Get the current hygiene value from the pets table
-  const [pet] = await db.query(`
-    SELECT hygiene FROM pets WHERE id = ?  -- Use "id" to match the pet in pets table
-  `, [petId]);
-
-  // Check if pet exists
-  if (!pet || pet.length === 0) {
-    throw new Error('Pet not found');
-  }
-
-  // Calculate the new hygiene value (ensure it doesn't exceed 100)
-  let newHygiene = pet[0].hygiene + 10;  // Add 10 hygiene points for the bath
-  if (newHygiene > 100) newHygiene = 100;  // Cap the hygiene at 100
-
-  // Update the pet's hygiene level in the pets table
-  const querypet = `
-    UPDATE pets
-    SET hygiene = ?
-    WHERE id = ?  -- Use "id" to match the pet in pets table
-  `;
-  await db.query(querypet, [newHygiene, petId]);
-
-  // Update the soap's quantity in the pet_bath_soap table
-  const query = `
-    UPDATE pet_bath_soap
-    SET quantity = ?, is_in_use = TRUE
-    WHERE pet_id = ? AND soap_type = ?
-  `;
-  await db.query(query, [newQuantity, petId, soapType]);
-
-  // Return the updated soap and hygiene data
-  return {
-    pet_id: petId,
-    soap_type: soapType,
-    new_quantity: newQuantity,
-    is_in_use: true,
-    new_hygiene: newHygiene
-  };
 };
 
 // Controller method to insert a toy for a pet
@@ -416,20 +361,92 @@ exports.updateAccessory = async (req, res) => {
   }
 };
 
-exports.updatePlay = async (req, res) => {
-  const petId = req.params.id;  // Correctly use `req` first, then `res`
-  const { increment } = req.body;
-
-  try {
-    // Call the service to update playfulness
-    const updatedPet = await petService.addPlay(petId, increment);
-
-    // Return the updated pet data
-    return res.status(200).json(updatedPet);
-  } catch (error) {
-    console.error("Error updating playfulness:", error);
-    return res.status(500).json({ message: "Server error", error: error.message });
+exports.updatePlay = async (petId, increment, result) => {
+  if (isNaN(increment) || increment === null || increment === undefined) {
+    throw new Error("Invalid increment value");
   }
+
+  // Fetch current stats
+  const selectQuery = `
+    SELECT playfulness, hunger, sleep, hygiene, coins
+    FROM pets
+    WHERE id = ?;
+  `;
+  const [rows] = await db.query(selectQuery, [petId]);
+
+  if (rows.length === 0) {
+    throw new Error("Pet not found");
+  }
+
+  let { playfulness, hunger, sleep, hygiene, coins } = rows[0];
+
+  // Initialize to 0 if null
+  playfulness = playfulness || 0;
+  hunger = hunger || 0;
+  sleep = sleep || 0;
+  hygiene = hygiene || 0;
+  coins = coins || 0;
+
+  // Add playfulness increment
+  playfulness += increment;
+
+  // Determine stat changes based on result
+  let hungerDecrease = 0;
+  let sleepDecrease = 0;
+  let hygieneDecrease = 0;
+  let coinIncrease = 0;
+
+  switch(result) {
+    case 'perfect': // Perfect Catch (GREEN)
+      hungerDecrease = 5;
+      sleepDecrease = 3;
+      hygieneDecrease = 2;
+      coinIncrease = 5;
+      break;
+    case 'good': // Imperfect Catch (BLUE)
+      hungerDecrease = 3;
+      sleepDecrease = 2;
+      hygieneDecrease = 1;
+      coinIncrease = 3;
+      break;
+    case 'miss': // Missed Catch
+      hungerDecrease = 1;
+      sleepDecrease = 1;
+      hygieneDecrease = 0;
+      coinIncrease = 1;
+      break;
+  }
+
+  // Apply stat changes
+  hunger -= hungerDecrease;
+  sleep -= sleepDecrease;
+  hygiene -= hygieneDecrease;
+  coins += coinIncrease;
+
+  // Clamp all values between 0 and 100
+  playfulness = Math.max(0, Math.min(100, playfulness));
+  hunger = Math.max(0, Math.min(100, hunger));
+  sleep = Math.max(0, Math.min(100, sleep));
+  hygiene = Math.max(0, Math.min(100, hygiene));
+  // Coins can go above 100
+  coins = Math.max(0, coins);
+
+  // Update database
+  const updateQuery = `
+    UPDATE pets
+    SET playfulness = ?, hunger = ?, sleep = ?, hygiene = ?, coins = ?
+    WHERE id = ?;
+  `;
+
+  await db.query(updateQuery, [playfulness, hunger, sleep, hygiene, coins, petId]);
+
+  return {
+    playfulness,
+    hunger,
+    sleep,
+    hygiene,
+    coins
+  };
 }
 
 exports.setActiveSoap = async (req, res) => {
@@ -451,4 +468,45 @@ exports.setActiveSoap = async (req, res) => {
     console.error("Error setting active soap:", error);
     return res.status(500).json({ message: "Server error", error: error.message });
   }
+};
+
+exports.dailyReward = async (req, res) => {
+    try {
+        const petId = req.params.id;
+        const { streak } = req.body; // Receive streak from Unity (1-7)
+
+        if (!streak || streak < 1 || streak > 7) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Invalid streak value. Must be between 1-7' 
+            });
+        }
+
+        const result = await petService.claimDailyReward(petId, streak);
+
+        if (result.success) {
+            res.status(200).json({
+                success: true,
+                message: result.message,
+                data: {
+                    coins: result.coins,
+                    food_stack: result.food_stack,
+                    reward_type: result.reward_type,
+                    reward_amount: result.reward_amount
+                }
+            });
+        } else {
+            res.status(404).json({
+                success: false,
+                message: result.message
+            });
+        }
+    } catch (error) {
+        console.error('Error claiming daily reward:', error);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Server error while claiming daily reward',
+            error: error.message 
+        });
+    }
 };

@@ -110,7 +110,7 @@ exports.addFood = async (petId, increments) => {
 exports.eatFood = async (petId) => {
   // Query to fetch the current food quantity and hunger
   const [currentPet] = await db.query(`
-    SELECT food_stack, hunger FROM pets WHERE id = ?
+    SELECT food_stack, hunger, hygiene FROM pets WHERE id = ?
   `, [petId]);
 
   if (!currentPet || currentPet.length === 0) {
@@ -130,6 +130,8 @@ exports.eatFood = async (petId) => {
   // Calculate new hunger value
   let newHungerQuantity = petData.hunger + 30; // Increase hunger by 30
 
+  let newHygiene = petData.hygiene - 2
+
   // Ensure that hunger doesn't exceed 100
   if (newHungerQuantity >= 100) {
     newHungerQuantity = 100; // Cap hunger at 100
@@ -140,14 +142,18 @@ exports.eatFood = async (petId) => {
     newHungerQuantity = 0; // If hunger was somehow negative, cap it at 0
   }
 
+  if (newHygiene <= 0) {
+    newHygiene = 0; // If hunger was somehow negative, cap it at 0
+  }
+
   // Query to update the pet's food quantity and hunger
   const query = `
     UPDATE pets
-    SET food_stack = ?, hunger = ?
+    SET food_stack = ?, hunger = ?, hygiene = ?
     WHERE id = ?
   `;
   
-  await db.query(query, [newFoodQuantity, newHungerQuantity, petId]);
+  await db.query(query, [newFoodQuantity, newHungerQuantity, newHygiene, petId]);
 
   // Return the updated pet data
   return {
@@ -460,4 +466,128 @@ exports.setActiveSoap = async (petId, soapType) => {
     is_in_use: true,
     message: 'Active soap updated successfully'
   };
+};
+
+exports.useSoap = async (petId, soapType) => {
+  // Check if the pet has this soap with quantity > 0
+  const [existingSoap] = await db.query(`
+    SELECT * FROM pet_bath_soap 
+    WHERE pet_id = ? AND soap_type = ? AND quantity > 0
+  `, [petId, soapType]);
+
+  // If no soap found or quantity is 0
+  if (!existingSoap || existingSoap.length === 0) {
+    throw new Error('Soap not found or quantity is 0');
+  }
+
+  // Decrease soap quantity by 1
+  const newQuantity = existingSoap[0].quantity - 1;
+
+  // Get current hygiene from pets table
+  const [pet] = await db.query(`
+    SELECT hygiene FROM pets WHERE id = ?
+  `, [petId]);
+
+  if (!pet || pet.length === 0) {
+    throw new Error('Pet not found');
+  }
+
+  // Calculate new hygiene (add 10, cap at 100)
+  let newHygiene = (pet[0].hygiene || 0) + 10;
+  if (newHygiene > 100) newHygiene = 100;
+
+  // Update pet's hygiene
+  await db.query(`
+    UPDATE pets
+    SET hygiene = ?
+    WHERE id = ?
+  `, [newHygiene, petId]);
+
+  // Update soap quantity
+  await db.query(`
+    UPDATE pet_bath_soap
+    SET quantity = ?
+    WHERE pet_id = ? AND soap_type = ?
+  `, [newQuantity, petId, soapType]);
+
+  // Return updated data
+  return {
+    pet_id: petId,
+    soap_type: soapType,
+    new_quantity: newQuantity,
+    new_hygiene: newHygiene
+  };
+};
+
+exports.claimDailyReward = async (petId, streak) => {
+    try {
+        // Define rewards for each day
+        const coinRewards = {
+            1: 5,
+            2: 10,
+            3: 15,
+            4: 20,
+            5: 25,
+            6: 30,
+            7: 0  // Day 7 gives food instead
+        };
+
+        const foodReward = 10; // Day 7 reward
+
+        // Get current pet data
+        const [pet] = await db.query(
+            'SELECT coins, food_stack FROM pets WHERE id = ?',
+            [petId]
+        );
+
+        if (pet.length === 0) {
+            return {
+                success: false,
+                message: 'Pet not found'
+            };
+        }
+
+        const currentCoins = pet[0].coins;
+        const currentFood = pet[0].food_stack;
+
+        let newCoins = currentCoins;
+        let newFood = currentFood;
+        let rewardType = '';
+        let rewardAmount = 0;
+
+        // Apply reward based on streak
+        if (streak === 7) {
+            // Day 7: Give food
+            newFood = currentFood + foodReward;
+            rewardType = 'food';
+            rewardAmount = foodReward;
+        } else {
+            // Days 1-6: Give coins
+            const coinsToAdd = coinRewards[streak];
+            newCoins = currentCoins + coinsToAdd;
+            rewardType = 'coins';
+            rewardAmount = coinsToAdd;
+        }
+
+        // Update the database
+        const todayDate = new Date().toISOString().split('T')[0]; // yyyy-MM-dd format
+
+        await db.query(
+            'UPDATE pets SET coins = ?, food_stack = ?, daily_login = ?, daily_login_progress = ? WHERE id = ?',
+            [newCoins, newFood, todayDate, streak, petId]
+        );
+
+        return {
+            success: true,
+            message: `Day ${streak} reward claimed successfully!`,
+            coins: newCoins,
+            food_stack: newFood,
+            reward_type: rewardType,
+            reward_amount: rewardAmount
+        };
+
+    } catch (error) {
+        console.error('Error in claimDailyReward service:', error);
+        throw error;
+    }
 };

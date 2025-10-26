@@ -30,11 +30,11 @@ exports.createResource = async (resourceData) => {
     title,
     category,
     resourceType || null,
-    description,
-    filepath,
-    banner || "",
+    description || null,
+    filepath || null,
+    banner || null,
     status,
-    posted_at,
+    posted_at || null,
   ]);
 
   return {
@@ -45,11 +45,11 @@ exports.createResource = async (resourceData) => {
     resourceType,
     description,
     filepath,
-    banner: banner || "",
-    created_at: new Date(),
-    modified_at: new Date(),
+    banner,
     status,
     posted_at,
+    created_at: new Date(),
+    modified_at: new Date(),
   };
 };
 
@@ -63,11 +63,11 @@ exports.updateResource = async (id, resourceData) => {
       title = COALESCE(?, title),
       category = COALESCE(?, category),
       resourceType = COALESCE(?, resourceType),
-      description = COALESCE(?, description),
-      filepath = COALESCE(?, filepath),
-      banner = COALESCE(?, banner),
+      description = ?,
+      filepath = ?,
+      banner = ?,
       status = COALESCE(?, status),
-      posted_at = COALESCE(?, posted_at),
+      posted_at = ?,
       modified_at = NOW()
     WHERE ID = ?
   `;
@@ -76,18 +76,17 @@ exports.updateResource = async (id, resourceData) => {
     isResource,
     title,
     category,
-    resourceType,
-    description,
-    filepath,
-    banner,
+    resourceType || null,
+    description || null,
+    filepath || null,
+    banner || null,
     status,
-    posted_at,
+    posted_at || null,
     id,
   ]);
   
   return result.affectedRows;
 };
-
 
 exports.deleteResources = async (ids) => {
   if (!Array.isArray(ids) || ids.length === 0) {
@@ -98,5 +97,11 @@ exports.deleteResources = async (ids) => {
   const sql = `DELETE FROM resources WHERE ID IN (${placeholders})`;
   
   const [result] = await db.query(sql, ids);
-  return result.affectedRows; // Returns number of deleted rows
+  return result.affectedRows;
+};
+
+exports.incrementView = async (id) => {
+  const sql = `UPDATE resources SET views = views + 1 WHERE ID = ?`;
+  const [result] = await db.query(sql, [id]);
+  return result.affectedRows;
 };

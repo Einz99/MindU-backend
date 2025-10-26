@@ -17,6 +17,7 @@ router.put('/:id/soap', petController.addSoap);
 router.put('/:id/soap/active', petController.setActiveSoap);
 router.put('/:id/soapuse', petController.useSoap);
 router.put('/:id/buyToy', petController.addToy);
+router.put('/:id/dailyReward', petController.dailyReward);
 router.put('/:petId/buyAccessory', petController.buyAccessory);
 router.put('/:petId/accessory', petController.updateAccessory);
 router.put('/:id/useToy', petController.updateToy);

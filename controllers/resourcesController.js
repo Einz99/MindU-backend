@@ -338,22 +338,30 @@ exports.incrementView = async (req, res) => {
   try {
     const { id } = req.params;
 
-    // 1️⃣ Update views
-    const [result] = await db.query(
-      `UPDATE resources SET views = COALESCE(views, 0) + 1 WHERE id = ?`,
-      [id]
-    );
+    // Call the service to increment view
+    const affectedRows = await resourcesService.incrementView(id);
 
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ message: "Resource not found" });
+    if (affectedRows === 0) {
+      return res.status(404).json({ 
+        success: false,
+        message: "Resource not found" 
+      });
     }
 
-    // 2️⃣ Optional: return new view count
-    const [rows] = await db.query(`SELECT views FROM resources WHERE id = ?`, [id]);
+    // Optional: Get the updated view count
+    const resource = await resourcesService.getResourceById(id);
 
-    return res.status(200).json({ message: "View count incremented", views: rows[0].views });
+    return res.status(200).json({ 
+      success: true,
+      message: "View count incremented", 
+      views: resource.views 
+    });
   } catch (err) {
     console.error("Error incrementing view:", err);
-    return res.status(500).json({ message: "Server error", error: err.message });
+    return res.status(500).json({ 
+      success: false,
+      message: "Server error", 
+      error: err.message 
+    });
   }
 };

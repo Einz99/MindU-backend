@@ -94,8 +94,8 @@ CREATE TABLE resources (
     resourceType VARCHAR(255),
     banner VARCHAR(255),
     status ENUM('Posted', 'Draft'),
-    description TEXT NOT NULL,
-    filepath VARCHAR(10000) NOT NULL,
+    description TEXT NULL,  -- 👈 Changed to NULL
+    filepath VARCHAR(10000) NULL,  -- 👈 Changed to NULL
     views INT DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     posted_at DATETIME DEFAULT NULL,
@@ -121,6 +121,8 @@ CREATE TABLE backlogs (
     FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
     FOREIGN KEY (staff_id) REFERENCES staffs(id) ON DELETE CASCADE
 );
+
+SELECT * FROM backlogs;
 
 CREATE TABLE ActivityLog(
 	id INT AUTO_INCREMENT PRIMARY KEY NOT NULL,
@@ -197,6 +199,8 @@ CREATE TABLE pets (
     playfulness INT DEFAULT 100,  -- Pet's playfulness level (0-100)
     hygiene INT DEFAULT 100,  -- Pet's hygiene level (0-100)
     sleep INT DEFAULT 100,  -- Pet's sleep level (0-100)
+    daily_login DATE,
+    daily_login_progress INT,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -249,5 +253,6 @@ CREATE TABLE alerts (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
-DROP TABLE alerts;
-
+ALTER TABLE resources 
+MODIFY COLUMN description TEXT NULL,
+MODIFY COLUMN filepath VARCHAR(10000) NULL;
