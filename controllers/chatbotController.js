@@ -220,28 +220,41 @@ exports.updateStatus = async (req, res) => {
 };
 
 exports.insertChatMessage = async (req, res) => {
-  const { student_id, message, is_from_office } = req.body; // Expecting student_id, message, and is_from_office in the body
+  const { student_id, message, is_from_office } = req.body;
   
   if (student_id == null || !message || typeof is_from_office !== 'boolean') {
     return res.status(400).json({ error: 'Student ID, message, and is_from_office are required' });
   }
 
   try {
-    // Call the service to insert message into office_chat with dynamic is_from_office
+    // Call the service to insert message into office_chat
     await chatbotService.insertChatMessage(student_id, message, is_from_office);
 
-    // Emit event to notify the correct room (based on sender)
+    // Emit event to notify the room
     if (req.io) {
       const studentRoom = `student-${student_id}`;
-      // Emit to the student's room so both the student and all agents listening will receive it
-      req.io.to(studentRoom).emit('new-chat-message', { student_id, message, is_from_office });
+      
+      console.log(`📤 Emitting new-chat-message to room ${studentRoom}`, {
+        student_id,
+        message: message.substring(0, 50) + '...',
+        is_from_office
+      });
+      
+      // Emit to the student's room (this will reach everyone in that room)
+      req.io.to(studentRoom).emit('new-chat-message', { 
+        student_id, 
+        message, 
+        is_from_office 
+      });
 
-      console.log('Emitted new-chat-message event');
+      console.log('✅ new-chat-message event emitted');
+    } else {
+      console.warn('⚠️ Socket.io instance not available');
     }
 
     res.status(200).json({ success: true, message: 'Message inserted successfully' });
   } catch (error) {
-    console.error('Error inserting chat message:', error);
+    console.error('❌ Error inserting chat message:', error);
     res.status(500).json({ error: 'An error occurred while inserting the message' });
   }
 };
@@ -344,7 +357,7 @@ exports.getAlert = async (req, res) => {
 exports.resolveAll = async (req, res) => {
   try {
     const { id } = req.params;
-
+    console.log("resolved All calling");
     const affectedRows = await chatbotService.resolveAllbyStudent(id);
 
     // 🆕 Emit real-time event for resolved alerts

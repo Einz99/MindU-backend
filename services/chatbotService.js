@@ -286,6 +286,7 @@ exports.getAllAlerts = async () => {
       SELECT 
         s.firstName,
         s.lastName,
+        a.is_resolved,
         a.student_id,
         a.created_at as date
       FROM alerts a
@@ -299,8 +300,8 @@ exports.resolveAllbyStudent = async (id) => {
   const query = `
     UPDATE alerts
     SET is_resolved = true
-    WHERE student_id = ?
-  `; // Remove comma after 'true'
+    WHERE student_id = ? AND is_resolved = false
+  `; // Make sure you're only resolving unresolved alerts.
   const [rows] = await db.query(query, [id]);
   
   return rows.affectedRows;

@@ -31,8 +31,8 @@ SELECT * FROM students
 WHERE isAskingHelp = true;
 
 UPDATE students
-SET isAskingHelp = true, chatStatus = 'Pending'
-WHERE id = 46;
+SET isAskingHelp = false, chatStatus = 'Completed'
+WHERE id = 622;
 
 #SHOW TABLES
 SHOW TABLES;
@@ -67,7 +67,7 @@ CREATE TABLE staffs (
     email VARCHAR(255) NOT NULL UNIQUE,
     password VARCHAR(255) NOT NULL,
     passwordLength INT NOT NULL,
-    position ENUM('Adviser', 'Guidance Advocate', 'Guidance Counselor', 'Admin') NOT NULL,
+    position ENUM('Adviser', 'Guidance Staff', 'Guidance Counselor', 'Admin') NOT NULL,
     section VARCHAR(255) UNIQUE,
     picture VARCHAR(255),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

@@ -17,8 +17,8 @@ exports.createBacklog = async (data) => {
   const params = [
     data.student_id || null,
     data.staff_id || null,
-    data.name || null,
     data.staffRequest || false,
+    data.name || null,
     data.message || null,
     data.sched_date || null,
     data.status,
