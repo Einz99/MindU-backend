@@ -26,33 +26,37 @@ const io = new Server(server, {
 let activeSessions = {};
 
 // Middleware
-const allowedOrigins = [
-  'http://192.168.1.6:3001',
-  'http://localhost:3001',
-  'http://localhost:3000',
-  'http://192.168.1.6:3000',
-  '*'
-];
-
 app.use(cors({
   origin: function (origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
+    // Allow requests with no origin (React Native, mobile apps)
+    if (!origin) {
+      return callback(null, true);
     }
+    
+    // Allow localhost for development
+    if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
+      return callback(null, true);
+    }
+    
+    // Allow all origins (development only!)
+    return callback(null, true);
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   credentials: true,
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
 }));
 
 app.options('*', cors());
 
 app.use((req, res, next) => {
-  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
-  res.setHeader('Cross-Origin-Embedder-Policy', 'require-corp');
+  // Only set strict headers for Unity WebGL files
+  if (req.path.includes('/play-pet') || req.path.includes('/petGame')) {
+    res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+    res.setHeader('Cross-Origin-Embedder-Policy', 'require-corp');
+  }
   next();
 });
+
 app.use(bodyParser.json());
 app.use("/resources", express.static(path.join(__dirname, "resources")));
 app.use('/public', express.static(path.join(__dirname, 'public')));
@@ -135,6 +139,12 @@ app.use("/api/pets", (req, res, next) => {
   req.io = io;
   next();
 }, petRoutes);
+
+const chatbotSettings = require("./routes/chatbotSettingsRoutes");
+app.use("/api/chatbotSettings", (req, res, next) => {
+  req.io = io;
+  next();
+}, chatbotSettings);
 
 // SINGLE WebSocket Connection Handler
 io.on("connection", (socket) => {
@@ -383,6 +393,39 @@ cron.schedule('*/10 * * * *', async () => {
       console.error("Error updating sleep times:", error);
     }
   }
+});
+
+app.use('/play-pet', express.static(path.join(__dirname, 'petGame'), {
+    setHeaders: (res, filePath) => {
+        // Set correct MIME types for Unity WebGL files
+        if (filePath.endsWith('.wasm')) {
+            res.setHeader('Content-Type', 'application/wasm');
+        }
+        if (filePath.endsWith('.js')) {
+            res.setHeader('Content-Type', 'application/javascript');
+        }
+        if (filePath.endsWith('.css')) {
+            res.setHeader('Content-Type', 'text/css');
+        }
+        if (filePath.endsWith('.gz')) {
+            res.setHeader('Content-Encoding', 'gzip');
+        }
+        if (filePath.endsWith('.br')) {
+            res.setHeader('Content-Encoding', 'br');
+        }
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    }
+}));
+
+// Route for playing pet game with student ID
+app.get('/play-pet/:id', (req, res) => {
+    const studentId = req.params.id;
+    console.log(`🎮 Opening pet game for student ID: ${studentId}`);
+    
+    // Send the Unity index.html
+    // The Unity game will extract the ID from the URL automatically
+    res.sendFile(path.join(__dirname, 'petGame', 'index.html'));
 });
 
 const getLocalIP = () => {

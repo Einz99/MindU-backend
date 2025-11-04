@@ -295,41 +295,34 @@ exports.deleteResource = async (req, res) => {
   }
 };
 
-exports.getTopResourcesAndWellness = async (req, res) => {
+exports.getResourcesAndWellness = async (req, res) => {
   try {
-    // Get top 5 resources (isResource = 1)
-    const [topResources] = await db.query(
+    // Get all resources (isResource = 1)
+    const [resources] = await db.query(
       `
-      SELECT ID, title, category, views, banner, filepath, resourceType
-      FROM (
-          SELECT 
-              ID, title, category, views, banner, filepath, resourceType,
-              ROW_NUMBER() OVER (PARTITION BY category ORDER BY views DESC) AS rn
-          FROM resources
-          WHERE isResource = 1
-      ) t
-      WHERE rn = 1
-      ORDER BY category;
+      SELECT ID, title, category, views, banner, filepath, resourceType, posted_at
+      FROM resources
+      WHERE isResource = 1
+      ORDER BY category, views DESC;
       `
     );
 
-    // Get top 1 wellness per category (isResource = 0)
-    const [topWellness] = await db.query(
+    // Get all wellness items (isResource = 0)
+    const [wellness] = await db.query(
       `
-      SELECT ID, title, category, views, banner, filepath, resourceType
+      SELECT ID, title, category, views, banner, filepath, resourceType, posted_at
       FROM resources
       WHERE isResource = 0
-      ORDER BY views DESC
-      LIMIT 5
+      ORDER BY views DESC;
       `
     );
 
     return res.status(200).json({
-      topResources,
-      topWellness,
+      resources,
+      wellness,
     });
   } catch (error) {
-    console.error("Error fetching top resources/wellness:", error);
+    console.error("Error fetching resources/wellness:", error);
     return res.status(500).json({ message: "Server error", error: error.message });
   }
 };

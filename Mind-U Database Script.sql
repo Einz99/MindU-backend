@@ -179,9 +179,13 @@ CREATE TABLE students_login(
 
 CREATE TABLE studentActivityLog(
 	id INT AUTO_INCREMENT PRIMARY KEY NOT NULL,
-    module ENUM('Resource', 'Wellness', 'Chatbot', 'Mood', 'Pet') NOT NULL,
+    module ENUM('Resource', 'Wellness', 'Chatbot', 'Mood', 'Pet', 'Scheduler') NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
+DESC studentActivityLog;
+
+SELECT * FROM studentActivityLog
+WHERE module = 'Chatbot';
 
 CREATE TABLE pets (
     id INT AUTO_INCREMENT PRIMARY KEY NOT NULL,
@@ -201,8 +205,19 @@ CREATE TABLE pets (
     sleep INT DEFAULT 100,  -- Pet's sleep level (0-100)
     daily_login DATE,
     daily_login_progress INT,
+    streak INT DEFAULT 0,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Simple FAQ Table (One Table Solution)
+CREATE TABLE faqs (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  category VARCHAR(255) NOT NULL,
+  question TEXT NOT NULL,
+  answer TEXT NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
 SELECT * FROM pets;
@@ -216,6 +231,7 @@ SET FOREIGN_KEY_CHECKS = 0;
 TRUNCATE TABLE pets;
 TRUNCATE TABLE pet_logins;  -- Also truncate the child table
 SET FOREIGN_KEY_CHECKS = 1;
+
 
 CREATE TABLE pet_toys (
     pet_id INT NOT NULL,
@@ -253,6 +269,72 @@ CREATE TABLE alerts (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+SELECT * FROM alerts;
+
+SELECT * FROM students;
+
+INSERT INTO alerts (student_id)
+VALUES (46), (46), (46), (47), (48), (47);
+
 ALTER TABLE resources 
 MODIFY COLUMN description TEXT NULL,
 MODIFY COLUMN filepath VARCHAR(10000) NULL;
+
+ALTER TABLE pets
+ADD COLUMN streak INT DEFAULT 0;
+
+-- Simple FAQ Table with draft/posted status
+CREATE TABLE faqs (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  category VARCHAR(255) NOT NULL,
+  question TEXT NOT NULL,
+  answer TEXT NOT NULL,
+  status ENUM('draft', 'posted') DEFAULT 'posted',
+  posted_at TIMESTAMP NULL DEFAULT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+-- Sample Data Insert (all active by default)
+INSERT INTO faqs (category, question, answer) VALUES
+-- Emotional & Mental Wellness
+('Emotional & Mental Wellness', 'What is emotional wellness?', 'Emotional wellness means being aware of your feelings, handling stress in a healthy way, and being okay with both good and tough emotions. It''s about knowing when to ask for help too — and that''s totally okay! 😊'),
+('Emotional & Mental Wellness', 'How can I manage stress or anxiety?', 'Try deep breathing, taking breaks, journaling, or even a quick walk. Also, talk to someone you trust — it really helps! 💬'),
+('Emotional & Mental Wellness', 'When should I talk to someone about how I feel?', 'If you''re feeling down, anxious, or overwhelmed for more than a few days, it''s a good idea to talk to a school counselor, teacher, or trusted adult. You don''t have to go through it alone. 💛'),
+('Emotional & Mental Wellness', 'Any quick ways to boost my mood?', 'Yes! Listen to your favorite music, text a friend, drink some water, or do something creative. Even a 5-minute break can reset your day! 🎶💡'),
+
+-- Social Wellness
+('Social Wellness', 'What is social wellness?', 'It''s all about having good relationships, feeling connected, and being part of a supportive community. Even one or two close friends can make a big difference! 👯'),
+('Social Wellness', 'How do I make new friends?', 'Try joining a club, talking to someone new in class, or starting with a compliment. Friendships often start with small moments! ✨'),
+('Social Wellness', 'What if I feel left out?', 'That''s tough — but you''re not alone. Talk to someone you trust and try connecting with others who share your interests. You belong! 💖'),
+('Social Wellness', 'How do I deal with drama or conflict?', 'Stay calm, listen, and speak honestly — not with anger. It''s okay to take space and come back to a convo later. Respect goes a long way. 🛑➡💬'),
+
+-- Financial & Occupational Wellness
+('Financial & Occupational Wellness', 'What does financial wellness mean for a student?', 'It means learning to manage your money wisely — saving, spending smart, and understanding the value of a budget. 💡'),
+('Financial & Occupational Wellness', 'How can I start saving money?', 'Even saving a little from lunch money, allowance, or a part-time job helps. Use a savings jar or app and watch it grow! 💰🌱'),
+('Financial & Occupational Wellness', 'What should I think about for my future career?', 'Think about what you''re good at and what you enjoy. Explore careers online or ask a teacher or counselor for advice. It''s okay not to have all the answers yet! 🔍🎨'),
+('Financial & Occupational Wellness', 'How do I balance school, work, and life?', 'Use a planner, set limits, and make sure you rest. It''s okay to say no sometimes — your well-being matters! 📅⚖'),
+
+-- Physical Wellness
+('Physical Wellness', 'How much exercise do I really need?', 'Aim for about 30–60 minutes a day of activity — even walking, dancing, or sports count! Keep it fun! 🏀'),
+('Physical Wellness', 'What are some healthy snack ideas?', 'Try fruit, yogurt, trail mix, or veggies with hummus. Tasty and good for you! 🍎🥕'),
+('Physical Wellness', 'How do I sleep better at night?', 'Power down your phone early, keep a regular bedtime, and try not to nap too long after school. 😴📴'),
+('Physical Wellness', 'What if I don''t feel confident in my body?', 'You''re not alone — lots of people feel this way. Focus on what your body can do, not just how it looks. Every body is worthy. 💙'),
+
+-- Spiritual Wellness
+('Spiritual Wellness', 'What is spiritual wellness?', 'It''s about finding meaning, purpose, and feeling connected to something bigger than yourself. 🙏'),
+('Spiritual Wellness', 'Do I have to be religious to be spiritual?', 'Nope! Some people connect through religion, others through nature, music, art, or helping others. 🕊🌳'),
+('Spiritual Wellness', 'How can I feel more grounded or peaceful?', 'Try breathing exercises, journaling, or sitting quietly with your thoughts. Even 2 minutes can help! ✍'),
+('Spiritual Wellness', 'What are some things I can try every day?', 'Say one thing you''re thankful for, take a quiet moment for yourself, or reflect on what went well today. 🙌'),
+
+-- Intellectual Wellness
+('Intellectual Wellness', 'What is intellectual wellness?', 'It''s about learning new things, thinking critically, and staying curious about the world. 🧠'),
+('Intellectual Wellness', 'How can I stay curious and creative?', 'Try reading, solving puzzles, exploring hobbies, or learning a new skill — like drawing or coding! 🎨💻'),
+('Intellectual Wellness', 'What are ways to study smarter?', 'Use flashcards, teach what you learn to someone else, and take short breaks. Find what works best for you! ⏱📖'),
+('Intellectual Wellness', 'How do I deal with boredom in school?', 'Look for ways to connect the topic to something you care about. Ask questions, or set a personal challenge! 🕵'),
+
+-- Environmental Wellness
+('Environmental Wellness', 'What is environmental wellness?', 'It''s about living in a clean, safe, and healthy environment — both at home and in your community. 🏡🌎'),
+('Environmental Wellness', 'How does my room or study space affect me?', 'A clutter-free space can help you focus and feel less stressed. Try organizing your desk and see how it feels! 📚🧹'),
+('Environmental Wellness', 'What can I do to help the planet?', 'Recycle, use less plastic, conserve water, or walk/bike more. Even small changes help! ♻🌳'),
+('Environmental Wellness', 'Why should I care about nature?', 'Being in nature can improve your mood and focus. It''s good for your mental and physical health! 🍃🌞');

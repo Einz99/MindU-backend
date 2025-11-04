@@ -468,24 +468,10 @@ exports.setActiveSoap = async (petId, soapType) => {
   };
 };
 
-exports.useSoap = async (petId, soapType) => {
-  // Check if the pet has this soap with quantity > 0
-  const [existingSoap] = await db.query(`
-    SELECT * FROM pet_bath_soap 
-    WHERE pet_id = ? AND soap_type = ? AND quantity > 0
-  `, [petId, soapType]);
-
-  // If no soap found or quantity is 0
-  if (!existingSoap || existingSoap.length === 0) {
-    throw new Error('Soap not found or quantity is 0');
-  }
-
-  // Decrease soap quantity by 1
-  const newQuantity = existingSoap[0].quantity - 1;
-
+exports.useSoap = async (petId) => {
   // Get current hygiene from pets table
   const [pet] = await db.query(`
-    SELECT hygiene FROM pets WHERE id = ?
+    SELECT hygiene, coins FROM pets WHERE id = ?
   `, [petId]);
 
   if (!pet || pet.length === 0) {
@@ -496,27 +482,20 @@ exports.useSoap = async (petId, soapType) => {
   let newHygiene = (pet[0].hygiene || 0) + 10;
   if (newHygiene > 100) newHygiene = 100;
 
-  // Update pet's hygiene
+  // Ensure there are enough coins for the soap usage
+  if (pet[0].coins < 3) {
+    throw new Error('Not enough coins to use soap');
+  }
+
+  // Update pet's hygiene and coins
   await db.query(`
     UPDATE pets
-    SET hygiene = ?
+    SET hygiene = ?, coins = coins - 3
     WHERE id = ?
   `, [newHygiene, petId]);
 
-  // Update soap quantity
-  await db.query(`
-    UPDATE pet_bath_soap
-    SET quantity = ?
-    WHERE pet_id = ? AND soap_type = ?
-  `, [newQuantity, petId, soapType]);
-
   // Return updated data
-  return {
-    pet_id: petId,
-    soap_type: soapType,
-    new_quantity: newQuantity,
-    new_hygiene: newHygiene
-  };
+  return { hygiene: newHygiene, coins: pet[0].coins - 3 };
 };
 
 exports.claimDailyReward = async (petId, streak) => {

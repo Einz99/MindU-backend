@@ -291,7 +291,6 @@ exports.getAllAlerts = async () => {
         a.created_at as date
       FROM alerts a
       LEFT JOIN students s ON a.student_id = s.id
-      ORDER BY a.created_at DESC
     `);
     return rows;
   }

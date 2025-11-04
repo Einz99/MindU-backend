@@ -137,16 +137,10 @@ exports.addSoap = async (req, res) => {
 
 exports.useSoap = async (req, res) => {
   const petId = req.params.id;
-  const { soap_type } = req.body;
 
   try {
-    // Validate input
-    if (!soap_type) {
-      return res.status(400).json({ message: "Missing required field: soap_type" });
-    }
-
-    // Call the service to decrease soap and update hygiene
-    const updatedData = await petService.useSoap(petId, soap_type);
+    // Call the service to update hygiene and reduce coins
+    const updatedData = await petService.useSoap(petId);
 
     // Return the updated data
     return res.status(200).json(updatedData);
@@ -361,92 +355,110 @@ exports.updateAccessory = async (req, res) => {
   }
 };
 
-exports.updatePlay = async (petId, increment, result) => {
-  if (isNaN(increment) || increment === null || increment === undefined) {
-    throw new Error("Invalid increment value");
+exports.updatePlay = async (req, res) => {
+  try {
+    const petId = req.params.id; // ← FIX: Use req.params.id (from route /:id)
+    const { increment, result } = req.body;
+
+    // ADD THIS DEBUG LOGGING
+    console.log('Received params:', { petId, increment, result });
+    console.log('Types:', { 
+      petId: typeof petId, 
+      increment: typeof increment, 
+      result: typeof result 
+    });
+
+    if (isNaN(increment) || increment === null || increment === undefined) {
+      return res.status(400).json({ message: "Invalid increment value" }); // ← FIX: return response
+    }
+
+    // Fetch current stats
+    const selectQuery = `
+      SELECT playfulness, hunger, sleep, hygiene, coins
+      FROM pets
+      WHERE id = ?;
+    `;
+    const [rows] = await db.query(selectQuery, [petId]);
+
+    if (rows.length === 0) {
+      return res.status(404).json({ message: "Pet not found" }); // ← FIX: return response
+    }
+
+    let { playfulness, hunger, sleep, hygiene, coins } = rows[0];
+
+    // Initialize to 0 if null
+    playfulness = playfulness || 0;
+    hunger = hunger || 0;
+    sleep = sleep || 0;
+    hygiene = hygiene || 0;
+    coins = coins || 0;
+
+    // Add playfulness increment
+    playfulness += increment;
+
+    // Determine stat changes based on result
+    let hungerDecrease = 0;
+    let sleepDecrease = 0;
+    let hygieneDecrease = 0;
+    let coinIncrease = 0;
+
+    switch(result) {
+      case 'perfect': // Perfect Catch (GREEN)
+        hungerDecrease = 5;
+        sleepDecrease = 3;
+        hygieneDecrease = 2;
+        coinIncrease = 5;
+        break;
+      case 'good': // Imperfect Catch (BLUE)
+        hungerDecrease = 3;
+        sleepDecrease = 2;
+        hygieneDecrease = 1;
+        coinIncrease = 3;
+        break;
+      case 'miss': // Missed Catch
+        hungerDecrease = 1;
+        sleepDecrease = 1;
+        hygieneDecrease = 0;
+        coinIncrease = 1;
+        break;
+    }
+
+    // Apply stat changes
+    hunger -= hungerDecrease;
+    sleep -= sleepDecrease;
+    hygiene -= hygieneDecrease;
+    coins += coinIncrease;
+
+    // Clamp all values between 0 and 100
+    playfulness = Math.max(0, Math.min(100, playfulness));
+    hunger = Math.max(0, Math.min(100, hunger));
+    sleep = Math.max(0, Math.min(100, sleep));
+    hygiene = Math.max(0, Math.min(100, hygiene));
+    // Coins can go above 100
+    coins = Math.max(0, coins);
+
+    // Update database
+    const updateQuery = `
+      UPDATE pets
+      SET playfulness = ?, hunger = ?, sleep = ?, hygiene = ?, coins = ?
+      WHERE id = ?;
+    `;
+
+    await db.query(updateQuery, [playfulness, hunger, sleep, hygiene, coins, petId]);
+
+    // ✅ FIX: Send response to Unity
+    return res.status(200).json({
+      playfulness,
+      hunger,
+      sleep,
+      hygiene,
+      coins
+    });
+
+  } catch (error) {
+    console.error("Error setting stats:", error);
+    return res.status(500).json({ message: "Server error", error: error.message });
   }
-
-  // Fetch current stats
-  const selectQuery = `
-    SELECT playfulness, hunger, sleep, hygiene, coins
-    FROM pets
-    WHERE id = ?;
-  `;
-  const [rows] = await db.query(selectQuery, [petId]);
-
-  if (rows.length === 0) {
-    throw new Error("Pet not found");
-  }
-
-  let { playfulness, hunger, sleep, hygiene, coins } = rows[0];
-
-  // Initialize to 0 if null
-  playfulness = playfulness || 0;
-  hunger = hunger || 0;
-  sleep = sleep || 0;
-  hygiene = hygiene || 0;
-  coins = coins || 0;
-
-  // Add playfulness increment
-  playfulness += increment;
-
-  // Determine stat changes based on result
-  let hungerDecrease = 0;
-  let sleepDecrease = 0;
-  let hygieneDecrease = 0;
-  let coinIncrease = 0;
-
-  switch(result) {
-    case 'perfect': // Perfect Catch (GREEN)
-      hungerDecrease = 5;
-      sleepDecrease = 3;
-      hygieneDecrease = 2;
-      coinIncrease = 5;
-      break;
-    case 'good': // Imperfect Catch (BLUE)
-      hungerDecrease = 3;
-      sleepDecrease = 2;
-      hygieneDecrease = 1;
-      coinIncrease = 3;
-      break;
-    case 'miss': // Missed Catch
-      hungerDecrease = 1;
-      sleepDecrease = 1;
-      hygieneDecrease = 0;
-      coinIncrease = 1;
-      break;
-  }
-
-  // Apply stat changes
-  hunger -= hungerDecrease;
-  sleep -= sleepDecrease;
-  hygiene -= hygieneDecrease;
-  coins += coinIncrease;
-
-  // Clamp all values between 0 and 100
-  playfulness = Math.max(0, Math.min(100, playfulness));
-  hunger = Math.max(0, Math.min(100, hunger));
-  sleep = Math.max(0, Math.min(100, sleep));
-  hygiene = Math.max(0, Math.min(100, hygiene));
-  // Coins can go above 100
-  coins = Math.max(0, coins);
-
-  // Update database
-  const updateQuery = `
-    UPDATE pets
-    SET playfulness = ?, hunger = ?, sleep = ?, hygiene = ?, coins = ?
-    WHERE id = ?;
-  `;
-
-  await db.query(updateQuery, [playfulness, hunger, sleep, hygiene, coins, petId]);
-
-  return {
-    playfulness,
-    hunger,
-    sleep,
-    hygiene,
-    coins
-  };
 }
 
 exports.setActiveSoap = async (req, res) => {

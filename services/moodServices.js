@@ -47,3 +47,14 @@ exports.getMoodByDate = async (student_id, emotion_date) => {
   );
   return rows.length > 0 ? rows[0] : null;
 };
+
+exports.updatePetCoinsAndStreak = async (student_id, coinsToAdd, streak) => {
+  const query = `
+    UPDATE pets
+    SET coins = coins + ?, streak = ?, updated_at = NOW()
+    WHERE student_id = ?;
+  `;
+  
+  const params = [coinsToAdd, streak, student_id];
+  await db.query(query, params);
+};
