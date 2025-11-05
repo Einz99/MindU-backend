@@ -1,58 +1,49 @@
 Plan for the All.
 
-mood summary 
-- tired > day > date (done)
-resource library and wellness tools should be separate and same blue, dapat nasa labas yung title (done)
-excel design/format for exporting so dapat csv lang. (done)
-calmi trigger should be first, next pending student requests (done)
-names/events should be depend on tab (done)
-FAQs (done need testing)
-
 WEB
-need global filtering summary for usage utilization, per chart download
-pag-tabihin app login and usage utilization 
-- need date, user log, category, strand 
-- if today, today would be show 
-scheduled > appointment 
-Triggers
-Landing Page
+- All modals header should be bold, and the other one (sub) should be middle and resize it (done)
+- CREATE Button drop-down, deretso na dapat sa create, fix create button (done)
+- Add Trigger not include 'Chatbot' (done)
+- ERROR/BUG: Show cancel modal even if clicked success/green modal (done)
+Line Graph - should be CSV (done)
 
-Mostly QA again.
-APP
-1. Profile Setting - Navigation Sidebar
-- Didn't navigate/clicking (done)
-2. Responsive UI both app (done) /game (done)
-3. Animation for changing page (done)
-4. Sidebar no log-out button (done)
-5. Persistent menu - dapat nawawala. (done)
-6. Accessing still show tab dapat nawawala yung tabs (done)
-7. coin earning by mood. (done)
-8. all connected to chart shall be checked if connected. (done)
-9. Announcement pag wala wag occupy ng space. (done but need checking)
--- Game
+Mobile: Chatbot -> not working add word/phrases
+- could not be case-sensitive
 
-11. Only 1 soap, move the soap in bath page when use decrease coins (done but need testing)
-12. Shop - current status for food (still need some fixing)
-13. Fix all shop remove soap. (done)
-14. PlayerPrefs Persistent and Integration. (done but need fixings in gameplays).
-15. lastly the number 8 (done).
-16. mini game itself di pa maayos. yung slider naka ilalim at mabilis make it 50-75. (done)
-17. May sombrero kahit natutulog. (done)
-18. Yung sa sabon dapat maayos yung number. (done)
-19. Daily rewards pa walang nangyayari. (done but need testing)
-20. Ayusin yung menu sa unity with exit. (done just need testing).
-21. petcontroller.updateplay - ERROR (done just need testing).
+Global Filtering applicable to all, sections should be ALL (done)
 
+CALENDAR OVERLAP DESIGN (done)
+EVENTS - Denied needs to be view, edit, resend (view, complete, move to trash, perma delete done) (edit and repropose left).
 
-10. One point access floating pop-up, need 3 access point for exit.
-just need to change button to x
--SoapNotEnoughPanel
--FoodNotEnoughPanel
--ExitPanel - box na red too.
--Confirm Exit to x too.
-(shopbg)
--Confirm Panel
--NotEnoughPanel
--gear icon sa topleft.
+RESOURCE LIBRARY OVERVIEW
+- Delete Download Icon
 
--Confirm Overlay Panel in Starting.
+GAME 
+
+Not fitted - UI 
+Indicator - Size
+BATH - Not functioning
+Throw ball - not accurate where the pet go.
+Modal for 'Do you want to try again?' 'Cancel', 'Retry'.
+
+Animation sizing for walking 
+Adjusting speed of horizontal page.
+
+Mood Tracker - last 7 days 
+Graph for Mood - Solid 1 week
+
+Remove console log of user
+Reactivate the email sender 
+Reactivate salt methods
+Remove most of console.log that are not needed
+Input super admin via node command
+Redesign email
+Make landing page
+Hosting
+Continue adding knowledge
+Chatbot still case sensitive and the punctuation shouldn't matter
+Remove google connection
+
+Height prioritized
+May problema pa sa shower
+Pet game naka 0 yung play dapat 10 cd

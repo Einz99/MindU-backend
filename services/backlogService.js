@@ -69,7 +69,13 @@ exports.updateBacklog = async (id, updateData) => {
  * @returns {Promise<Array>} A list of backlog records.
  */
 exports.getBacklogs = async (filter = {}) => {
-  let query = "SELECT * FROM backlogs";
+  let query = `
+      SELECT 
+        b.*, 
+        s.section
+      FROM backlogs b
+      LEFT JOIN students s ON b.student_id = s.id
+  `;
   let params = [];
   let conditions = [];
 
@@ -87,10 +93,12 @@ exports.getBacklogs = async (filter = {}) => {
     query += " WHERE " + conditions.join(" AND ");
   }
 
-  query += " ORDER BY sched_date ASC";
+  // Combine both ordering conditions into one ORDER BY
+  query += " ORDER BY b.created_at DESC, sched_date ASC";
+
   const [rows] = await db.query(query, params);
   return rows;
-}
+};
 
 /**
  * Delete a backlog record by its ID.

@@ -286,6 +286,7 @@ exports.getAllAlerts = async () => {
       SELECT 
         s.firstName,
         s.lastName,
+        s.section,
         a.is_resolved,
         a.student_id,
         a.created_at as date
