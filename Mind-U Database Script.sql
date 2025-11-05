@@ -122,8 +122,6 @@ CREATE TABLE backlogs (
     FOREIGN KEY (staff_id) REFERENCES staffs(id) ON DELETE CASCADE
 );
 
-SELECT * FROM backlogs;
-
 CREATE TABLE ActivityLog(
 	id INT AUTO_INCREMENT PRIMARY KEY NOT NULL,
     message TEXT,
@@ -139,8 +137,6 @@ CREATE TABLE mood_data (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     modified_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
-
-DESC mood_data;
 
 CREATE TABLE chatbot_history (
 	chat_id INT AUTO_INCREMENT PRIMARY KEY NOT NULL,
@@ -161,8 +157,6 @@ CREATE TABLE office_chat (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
-SELECT * FROM office_chat;
-
 CREATE TABLE alerts (
 	id INT AUTO_INCREMENT PRIMARY KEY NOT NULL,
 	student_id INT NOT NULL,
@@ -179,9 +173,12 @@ CREATE TABLE students_login(
 
 CREATE TABLE studentActivityLog(
 	id INT AUTO_INCREMENT PRIMARY KEY NOT NULL,
+    student_id INT,
+    FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
     module ENUM('Resource', 'Wellness', 'Chatbot', 'Mood', 'Pet', 'Scheduler') NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
+
 DESC studentActivityLog;
 
 SELECT * FROM studentActivityLog
@@ -210,15 +207,28 @@ CREATE TABLE pets (
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
--- Simple FAQ Table (One Table Solution)
 CREATE TABLE faqs (
   id INT PRIMARY KEY AUTO_INCREMENT,
   category VARCHAR(255) NOT NULL,
   question TEXT NOT NULL,
   answer TEXT NOT NULL,
+  status ENUM('Draft', 'Posted') DEFAULT 'Posted',
+  posted_at TIMESTAMP NULL DEFAULT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
+
+CREATE TABLE chatbotTriggers(
+  ID INT PRIMARY KEY AUTO_INCREMENT,
+  category ENUM('Word', 'Phrase') NOT NULL,
+  chatTriggers TEXT NOT NULL,
+  status ENUM('Draft', 'Posted') DEFAULT 'Posted',
+  posted_at TIMESTAMP NULL DEFAULT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+SELECT * FROM chatbotTriggers;
 
 SELECT * FROM pets;
 
@@ -257,8 +267,6 @@ CREATE TABLE pet_bath_soap (
     FOREIGN KEY (pet_id) REFERENCES pets(id) ON DELETE CASCADE
 );
 
-SELECT * FROM pet_bath_soap;
-
 # New Tables and Alterations
 
 CREATE TABLE alerts (
@@ -285,15 +293,30 @@ ADD COLUMN streak INT DEFAULT 0;
 
 -- Simple FAQ Table with draft/posted status
 CREATE TABLE faqs (
-  id INT PRIMARY KEY AUTO_INCREMENT,
+  ID INT PRIMARY KEY AUTO_INCREMENT,
   category VARCHAR(255) NOT NULL,
   question TEXT NOT NULL,
   answer TEXT NOT NULL,
-  status ENUM('draft', 'posted') DEFAULT 'posted',
+  status ENUM('Draft', 'Posted') DEFAULT 'Posted',
   posted_at TIMESTAMP NULL DEFAULT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
+
+CREATE TABLE chatbotTriggers(
+  ID INT PRIMARY KEY AUTO_INCREMENT,
+  category ENUM('Word', 'Phrase') NOT NULL,
+  chatTriggers TEXT NOT NULL,
+  status ENUM('Draft', 'Posted') DEFAULT 'Posted',
+  posted_at TIMESTAMP NULL DEFAULT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+SELECT * FROM chatbotTriggers;
+
+-- drop and create table again
+DROP TABLE studentActivityLog;
 
 -- Sample Data Insert (all active by default)
 INSERT INTO faqs (category, question, answer) VALUES
@@ -338,3 +361,39 @@ INSERT INTO faqs (category, question, answer) VALUES
 ('Environmental Wellness', 'How does my room or study space affect me?', 'A clutter-free space can help you focus and feel less stressed. Try organizing your desk and see how it feels! 📚🧹'),
 ('Environmental Wellness', 'What can I do to help the planet?', 'Recycle, use less plastic, conserve water, or walk/bike more. Even small changes help! ♻🌳'),
 ('Environmental Wellness', 'Why should I care about nature?', 'Being in nature can improve your mood and focus. It''s good for your mental and physical health! 🍃🌞');
+
+INSERT INTO chatbotTriggers (category, chatTriggers) 
+VALUES
+  ('Phrase', 'I feel like giving up.'),
+  ('Phrase', 'I\'m so tired of everything.'),
+  ('Phrase', 'I want to disappear'),
+  ('Word', 'give up'),
+  ('Word', 'suicide'),
+  ('Word', 'kill myself'),
+  ('Phrase', 'end it all'),
+  ('Word', 'hurt myself'),
+  ('Word', 'worthless'),
+  ('Word', 'depressed'),
+  ('Phrase', 'tired of life'),
+  ('Phrase', 'end my life'),
+  ('Phrase', 'want to die'),
+  ('Phrase', 'I don\'t want to live'),
+  ('Phrase', 'I can\'t go on'),
+  ('Phrase', 'better off dead'),
+  ('Word', 'hang myself'),
+  ('Word', 'overdose'),
+  ('Phrase', 'slit my wrists'),
+  ('Word', 'cut myself'),
+  ('Word', 'bleeding'),
+  ('Word', 'self-harm'),
+  ('Word', 'hopeless'),
+  ('Word', 'useless'),
+  ('Word', 'empty'),
+  ('Phrase', 'no reason to live'),
+  ('Phrase', 'can\'t handle this'),
+  ('Phrase', 'tired of living'),
+  ('Word', 'numb inside'),
+  ('Word', 'hate myself'),
+  ('Word', 'I\'m done');
+  
+  

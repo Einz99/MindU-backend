@@ -135,7 +135,8 @@ exports.updateFAQ = async (req, res) => {
         values.push(new Date());
       }
       // Clear posted_at when changing from posted to draft
-      else if (status === 'draft' && existing[0].status === 'posted') {
+      else if (status === 'draft') {
+        // Always clear posted_at when status is draft
         updates.push('posted_at = ?');
         values.push(null);
       }
@@ -332,6 +333,223 @@ exports.toggleBulk = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to bulk toggle FAQs'
+    });
+  }
+};
+
+
+// ========== TRIGGER ENDPOINTS ==========
+exports.getActiveTriggers = async (req, res) => {
+  try {
+    const [triggers] = await db.query(
+      'SELECT * FROM chatbotTriggers WHERE status = "active" ORDER BY id'
+    );
+    
+    res.json({
+      success: true,
+      triggers
+    });
+  } catch (error) {
+    console.error('Error fetching active triggers:', error);
+    res.status(500).json({  
+      success: false,
+      message: 'Failed to fetch triggers'
+    });
+  }
+};
+
+exports.getAllTriggers = async (req, res) => {
+  try {
+    const [triggers] = await db.query(
+      'SELECT * FROM chatbotTriggers ORDER BY id'
+    );
+    res.json({
+      success: true,
+      triggers
+    });
+  } catch (error) {
+    console.error('Error fetching all triggers:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch triggers'
+    });
+  }
+};
+
+exports.createTrigger = async (req, res) => {
+  try {
+    const { category, trigger, status = 'draft' } = req.body;
+
+    // Validate input
+    if (!category || !trigger) {
+      return res.status(400).json({
+        success: false,
+        message: 'Category and trigger are required'
+      });
+    }
+
+    if(!['draft', 'posted'].includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Status must be either "draft" or "posted"'
+      });
+    }
+
+    const posted_at = status === 'posted' ? new Date() : null;
+
+    const [result] = await db.query(
+      'INSERT INTO chatbotTriggers (category, chatTriggers, status, posted_at) VALUES (?, ?, ?, ?)',
+      [category, trigger, status, posted_at]
+    );
+
+    res.status(201).json({
+      success: true,
+      message: `Trigger created as ${status}`,
+      id: result.insertId,
+      posted_at
+    });
+  } catch (error) {
+    console.error('Error creating trigger:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to create trigger'
+    });
+  }
+};
+
+exports.updateTrigger = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { category, trigger, status } = req.body;
+
+    // Check if trigger exists
+    const [existing] = await db.query('SELECT status FROM chatbotTriggers WHERE ID = ?', [id]);
+    if (existing.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Trigger not found'
+      });
+    }
+    // Build dynamic update query
+    const updates = [];
+    const values = [];
+    if (category !== undefined) {
+      updates.push('category = ?');
+      values.push(category);
+    }
+    if (trigger !== undefined) {
+      updates.push('chatTriggers = ?');
+      values.push(trigger);
+    }
+    if (status !== undefined) {
+      // Validate status
+      if (!['draft', 'posted'].includes(status)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Status must be either "draft" or "posted"'
+        });
+      }
+      
+      updates.push('status = ?');
+      values.push(status);
+      
+      // Set posted_at when changing from draft to posted
+      if (status === 'posted' && existing[0].status === 'draft') {
+        updates.push('posted_at = ?');
+        values.push(new Date());
+      }
+      // Clear posted_at when changing from posted to draft
+      else if (status === 'draft') {
+        // Always clear posted_at when status is draft
+        updates.push('posted_at = ?');
+        values.push(null);
+      }
+    }
+    if (updates.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'No fields to update'
+      });
+    }
+    values.push(id);
+
+    await db.query(
+      `UPDATE chatbotTriggers SET ${updates.join(', ')} WHERE ID = ?`,
+      values
+    );
+    res.json({
+      success: true,
+      message: 'Trigger updated successfully'
+    });
+  } catch (error) {
+    console.error('Error updating trigger:', error);
+    res.status(500).json({  
+      success: false,
+      message: 'Failed to update trigger'
+    });
+  }
+};
+
+exports.deleteTrigger = async (req, res) => {
+  try {
+    const { id } = req.params;
+    // Check if trigger exists
+    const [existing] = await db.query('SELECT id FROM chatbotTriggers WHERE ID = ?', [id]);
+    if (existing.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Trigger not found'
+      });
+    }
+
+    await db.query('DELETE FROM chatbotTriggers WHERE ID = ?', [id]);
+
+    res.json({
+      success: true,
+      message: 'Trigger deleted successfully'
+    });
+  } catch (error) {
+    console.error('Error deleting trigger:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to delete trigger'
+    });
+  }
+};
+
+exports.deleteMultipleTriggers = async (req, res) => {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide an array of trigger IDs'
+      });
+    }
+
+    const [result] = await db.query(
+      `DELETE FROM chatbotTriggers WHERE ID IN (${ids.map(() => '?').join(',')})`,
+      ids
+    );
+
+    const deletedCount = result.affectedRows;
+
+    if (deletedCount === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'No matching chatbotTriggers found'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: `${deletedCount} trigger(s) deleted successfully`
+    });
+  } catch (error) {
+    console.error('Error deleting chatbotTriggers:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to delete chatbotTriggers'
     });
   }
 };

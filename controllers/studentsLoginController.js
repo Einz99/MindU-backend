@@ -1,41 +1,39 @@
-// controllers/studentsLoginController.js
 const db = require("../db");
 
 exports.getAllStudentLogInCounts = async (req, res) => {
   try {
-    const { date } = req.query; // optional selected date, format YYYY-MM-DD
+    const { startDate, endDate } = req.query;
 
-    // 1️⃣ Fetch total students
+    // 1️⃣ Fetch total students count
     const [totalRows] = await db.query(`SELECT COUNT(*) AS total FROM students`);
     const totalStudents = totalRows[0]?.total || 0;
 
-    // 2️⃣ Helper: get unique logins for a given day
-    const getUniqueLogins = async (day) => {
-      const [rows] = await db.query(
-        `SELECT COUNT(DISTINCT student_id) AS logged 
-         FROM students_login 
-         WHERE DATE(login_time) = ?`,
-        [day]
-      );
-      return rows[0]?.logged || 0;
-    };
+    // 2️⃣ Fetch all login records with student sections within date range
+    let sql = `
+      SELECT 
+        sl.student_id,
+        DATE(sl.login_time) AS login_date,
+        s.section
+      FROM students_login sl
+      JOIN students s ON sl.student_id = s.id
+    `;
 
-    // 3️⃣ Determine dates
-    const todayDate = new Date().toISOString().slice(0, 10);
-    const yesterdayDate = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
-    const selectedDate = date || todayDate;
+    const params = [];
 
-    // 4️⃣ Get counts
-    const todayStudents = await getUniqueLogins(todayDate);
-    const yesterdayStudents = await getUniqueLogins(yesterdayDate);
-    const selectedDayStudents = await getUniqueLogins(selectedDate);
+    // Add date filter if provided
+    if (startDate && endDate) {
+      sql += ` WHERE DATE(sl.login_time) BETWEEN ? AND ?`;
+      params.push(startDate, endDate);
+    }
 
-    // 5️⃣ Return raw counts
+    sql += ` ORDER BY sl.login_time DESC`;
+
+    const [logins] = await db.query(sql, params);
+
+    // 3️⃣ Return raw data (filtering done on frontend)
     return res.status(200).json({
       totalStudents,
-      today: todayStudents,
-      yesterday: yesterdayStudents,
-      selectedDay: selectedDayStudents,
+      logins
     });
   } catch (err) {
     console.error("Error fetching login counts:", err);
