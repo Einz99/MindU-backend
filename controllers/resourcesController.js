@@ -12,7 +12,6 @@ const broadcastResources = async (io) => {
 
   try {
     const resources = await resourcesService.getAllResources();
-    console.log("📡 Broadcasting Full Resources List:", resources);
     io.emit("updateResources", resources); // Emit the latest state of resources
   } catch (error) {
     console.error("❌ Error broadcasting resources:", error);

@@ -3,7 +3,6 @@ const chatbotService = require('../services/chatbotService');
 
 exports.sendMessage = async (req, res) => {
   const { message, userId } = req.body;
-  console.log('Received chat request:', { message, userId });
 
   // Validate input
   if (!userId || !message) {
@@ -23,7 +22,6 @@ exports.sendMessage = async (req, res) => {
   }
 
   try {
-    console.log('Processing chat request...');
     
     // Call the service to handle the chat logic (store and get response)
     const botResponse = await chatbotService.handleChat(
@@ -31,8 +29,6 @@ exports.sendMessage = async (req, res) => {
       userId, 
       req.io || req.app.locals.io // Handle different ways io might be passed
     );
-
-    console.log('Chat request processed successfully:', botResponse);
     
     res.status(200).json({ 
       fulfillmentText: botResponse,
@@ -234,12 +230,6 @@ exports.insertChatMessage = async (req, res) => {
     if (req.io) {
       const studentRoom = `student-${student_id}`;
       
-      console.log(`📤 Emitting new-chat-message to room ${studentRoom}`, {
-        student_id,
-        message: message.substring(0, 50) + '...',
-        is_from_office
-      });
-      
       // Emit to the student's room (this will reach everyone in that room)
       req.io.to(studentRoom).emit('new-chat-message', { 
         student_id, 
@@ -247,7 +237,6 @@ exports.insertChatMessage = async (req, res) => {
         is_from_office 
       });
 
-      console.log('✅ new-chat-message event emitted');
     } else {
       console.warn('⚠️ Socket.io instance not available');
     }
@@ -278,7 +267,6 @@ exports.deactivate = async (req, res) => {
         userId,
         timestamp: new Date()
       });
-      console.log('Emitted help-request-completed event');
     }
 
     res.status(200).json({
@@ -308,7 +296,6 @@ exports.addAlert = async (req, res) => {
           alertId: result.alertId,
           timestamp: new Date()
         });
-        console.log('Emitted new-alert-created event');
       }
 
       res.status(200).json({
@@ -357,7 +344,6 @@ exports.getAlert = async (req, res) => {
 exports.resolveAll = async (req, res) => {
   try {
     const { id } = req.params;
-    console.log("resolved All calling");
     const affectedRows = await chatbotService.resolveAllbyStudent(id);
 
     // 🆕 Emit real-time event for resolved alerts
@@ -367,7 +353,6 @@ exports.resolveAll = async (req, res) => {
         affectedRows: affectedRows,
         timestamp: new Date()
       });
-      console.log('Emitted alerts-resolved event');
     }
 
     res.status(200).json({

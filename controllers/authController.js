@@ -36,9 +36,7 @@ const upload = multer({ storage }).single("profilePic");
 
 exports.login = async (req, res) => {
   const { identifier, password } = req.body;
-  console.log("logging in")
   const sql = "SELECT * FROM students WHERE email = ?";
-  console.log(req.body);
   try {
     // Await the query result (no callback)
     const [results] = await db.query(sql, [identifier]);

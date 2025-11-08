@@ -14,6 +14,8 @@ USE MindU;
 #DROP TABLE chatbot_history;
 #DROP TABLE office_chat
 
+
+
 #SELECTING TABLES
 SELECT * FROM students;
 SELECT * FROM staffs;
@@ -73,6 +75,11 @@ CREATE TABLE staffs (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     modified_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+SELECT * FROM students;
+
+INSERT staffs (name, email, password, passwordLength, position, section)
+VALUES ('Ribnan Mhay Sangalang', 'sangalangribnan12@gmail.com', '12345', 5, 'Adviser', 'BSIT 3-3');
 
 CREATE TABLE announcements (
 	ID INT AUTO_INCREMENT PRIMARY KEY NOT NULL,

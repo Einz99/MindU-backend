@@ -1,38 +1,24 @@
 // controllers/backlogController.js
 const backlogService = require("../services/backlogService");
 const db = require("../db");
-const { format, addDays } = require("date-fns");
+const { format } = require("date-fns");
 const nodemailer = require('nodemailer');
+const fs = require("fs");
+const path = require("path");
 
-/**
- * Create a new backlog record.
- * - If a student_id is provided then it is a student-created request:
- *    - title: "Request Meeting"
- *    - sched_date: forced to null
- *    - status: "Pending"
- *    - name: fetched from the students table (firstName + " " + lastName)
- * - Otherwise, it is an admin-created event:
- *    - title: "Guidance Related Events"
- *    - sched_date must be provided
- *    - status: "Scheduled"
- *    - name: provided in the request (from guidance)
- */
 exports.createBacklog = async (req, res) => {
   try {
     const data = req.body;
 
     if (data.student_id) {
-      // Student creation
       data.title = "Request Meeting";
       data.sched_date = null;
       data.status = "Pending";
       
-      // Lookup student's firstName and lastName from the students table.
       const [rows] = await db.query(
         "SELECT firstName, lastName, email FROM students WHERE id = ?",
         [data.student_id]
       );
-
 
       if (rows.length > 0) {
         const student = rows[0];
@@ -62,10 +48,7 @@ exports.createBacklog = async (req, res) => {
       } else {
         data.name = "Unknown Student";
       }
-
-      
     } else {
-      // Admin creation
       if (!data.sched_date) {
         return res.status(400).json({ error: "Admin-created event must have sched_date" });
       }
@@ -76,7 +59,6 @@ exports.createBacklog = async (req, res) => {
 
       data.status = "Scheduled";
 
-      // 📝 Insert Activity Log
       const formatDate = (dateStr) =>
         format(new Date(dateStr), "EEEE - MM/dd/yyyy");
 
@@ -86,7 +68,6 @@ exports.createBacklog = async (req, res) => {
 
     const createdRecord = await backlogService.createBacklog(data);
 
-    // Emit update
     const io = req.io;
     if (io) {
       const updatedBacklogs = await backlogService.getBacklogs({});
@@ -101,14 +82,6 @@ exports.createBacklog = async (req, res) => {
   }
 };
 
-/**
- * Update an existing backlog record.
- * Only an admin is allowed to update.
- * Expects req.body.action to be one of: "Cancel", "Edit", or "Mark Complete".
- * - "Edit": If a new sched_date is provided, updates the date and sets status to "Scheduled".
- * - "Cancel": Sets status to "Cancelled" and records completed_at.
- * - "Mark Complete": Sets status to "Completed" and records completed_at.
- */
 exports.updateBacklog = async (req, res) => {
   try {
     const id = req.params.id;
@@ -167,7 +140,6 @@ exports.updateBacklog = async (req, res) => {
       return res.status(200).json({ success: true, message: "Backlog record deleted successfully." });
     }
 
-    // Replace message if not related to student
     if (!student_id && message) {
       message = message.replace(/meeting request from .*?(?=( |$))/, `guidance event named ${name}`);
     }
@@ -178,7 +150,6 @@ exports.updateBacklog = async (req, res) => {
       await db.query("INSERT INTO ActivityLog (message) VALUES (?)", [message]);
     }
 
-    // Emit update
     const io = req.io;
     if (io) {
       const updatedBacklogs = await backlogService.getBacklogs({});
@@ -207,7 +178,7 @@ exports.updateBacklog = async (req, res) => {
           subject: 'Appointment Scheduled – MIND-U Confirmation',
           html: `
             <p>Dear ${student.firstName} ${student.lastName},</p>
-            <p>We’re pleased to inform you that your appointment through the <strong>MIND-U Student Wellness Management System</strong> has been <strong>successfully scheduled</strong>.</p>
+            <p>We're pleased to inform you that your appointment through the <strong>MIND-U Student Wellness Management System</strong> has been <strong>successfully scheduled</strong>.</p>
             <p><strong>Appointment Details:</strong><br>
             Date: ${formattedDate}<br>
             Time: ${formattedTime}</p>
@@ -225,12 +196,8 @@ exports.updateBacklog = async (req, res) => {
     console.error("Error in updateBacklog:", error);
     return res.status(500).json({ error: error.message });
   }
-}
+};
 
-/**
- * Retrieve backlog records with optional filtering.
- * The front end can filter records by status (e.g., to show pending requests vs. scheduled events).
- */
 exports.getBacklogs = async (req, res) => {
   try {
     const filter = req.query;
@@ -240,23 +207,17 @@ exports.getBacklogs = async (req, res) => {
     console.error("Error in getBacklogs:", error);
     return res.status(500).json({ error: error.message });
   }
-}
+};
 
-/**
- * Delete a backlog record by its ID.
- * Only an admin is allowed to delete.
- */
 exports.deleteBacklog = async (req, res) => {
   try {
     const id = req.params.id;
 
-    // Check if the backlog exists
     const [existingBacklog] = await db.query("SELECT * FROM backlogs WHERE id = ?", [id]);
     if (existingBacklog.length === 0) {
       return res.status(404).json({ error: "Backlog not found" });
     }
 
-    // Perform the delete operation
     await backlogService.deleteBacklog(id);
     const io = req.io;
     if (io) {
@@ -269,7 +230,7 @@ exports.deleteBacklog = async (req, res) => {
     console.error("Error in deleteBacklog:", error);
     return res.status(500).json({ error: error.message });
   }
-}
+};
 
 exports.createRequest = async (req, res) => {
   try {
@@ -298,10 +259,110 @@ exports.createRequest = async (req, res) => {
   }
 };
 
+// NEW: Update proposal (for edit and repropose)
+exports.updateProposal = async (req, res) => {
+  try {
+    const id = req.params.id;
+    const { name, sched_date, staff_name, staff_position, action, original_proposal, current_status } = req.body;
+    const file = req.file;
+
+    let newStatus;
+    let message;
+    let relativePath;
+
+    if (action === "EditDateOnly") {
+      // Scheduled: only update date, keep status as Scheduled
+      newStatus = "Scheduled";
+      message = `${staff_position}: ${staff_name} rescheduled the guidance event named ${name} to ${format(new Date(sched_date), "EEEE - MM/dd/yyyy")}`;
+      
+      // Update database without changing proposal file
+      await db.query(
+        `UPDATE backlogs 
+         SET sched_date = ?, modified_at = NOW()
+         WHERE id = ?`,
+        [sched_date, id]
+      );
+    } else if (action === "Edit") {
+      if (!file) {
+        return res.status(400).json({ error: "Missing proposal file" });
+      }
+
+      // Delete old proposal file if it exists
+      if (original_proposal) {
+        const oldFilePath = path.join(__dirname, "../public", original_proposal);
+        if (fs.existsSync(oldFilePath)) {
+          fs.unlinkSync(oldFilePath);
+        }
+      }
+
+      relativePath = `request/${file.filename}`;
+
+      // Determine new status based on current status
+      if (current_status === "Pending") {
+        newStatus = "Pending";
+        message = `${staff_position}: ${staff_name} updated the pending guidance event proposal named ${name} scheduled ${format(new Date(sched_date), "EEEE - MM/dd/yyyy")}`;
+      } else if (current_status === "Denied" || current_status === "Trash") {
+        // Denied/Trashed: set to Pending for re-review
+        newStatus = "Pending";
+        message = `${staff_position}: ${staff_name} resubmitted the guidance event proposal named ${name} for ${format(new Date(sched_date), "EEEE - MM/dd/yyyy")}`;
+      }
+
+      // Update database with new proposal file
+      await db.query(
+        `UPDATE backlogs 
+         SET sched_date = ?, proposal = ?, status = ?, modified_at = NOW()
+         WHERE id = ?`,
+        [sched_date, relativePath, newStatus, id]
+      );
+    } else if (action === "Repropose") {
+      if (!file) {
+        return res.status(400).json({ error: "Missing proposal file" });
+      }
+
+      // Delete old proposal file if it exists
+      if (original_proposal) {
+        const oldFilePath = path.join(__dirname, "../public", original_proposal);
+        if (fs.existsSync(oldFilePath)) {
+          fs.unlinkSync(oldFilePath);
+        }
+      }
+
+      relativePath = `request/${file.filename}`;
+
+      // Reproposing (from Trash back to Pending)
+      newStatus = "Pending";
+      message = `${staff_position}: ${staff_name} reproposed the guidance event named ${name} for ${format(new Date(sched_date), "EEEE - MM/dd/yyyy")}`;
+
+      // Update database
+      await db.query(
+        `UPDATE backlogs 
+         SET sched_date = ?, proposal = ?, status = ?, modified_at = NOW()
+         WHERE id = ?`,
+        [sched_date, relativePath, newStatus, id]
+      );
+    }
+
+    // Log activity
+    await db.query("INSERT INTO ActivityLog (message) VALUES (?)", [message]);
+
+    // Emit update
+    const io = req.io;
+    if (io) {
+      const updatedBacklogs = await backlogService.getBacklogs({});
+      io.emit("updateBacklogs", updatedBacklogs);
+    }
+
+    res.json({ success: true, data: { id, name, sched_date, proposal: relativePath || original_proposal, status: newStatus } });
+  } catch (err) {
+    console.error("Error updating proposal:", err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
 exports.updateProposalStatus = async (req, res) => {
   try {
     const id = req.params.id;
-    const { status, comment } = req.body; // status: "Approved" or "Denied"
+    const { status, comment } = req.body;
 
     if (!["Approved", "Denied"].includes(status)) {
       return res.status(400).json({ error: "Invalid status" });
@@ -309,16 +370,13 @@ exports.updateProposalStatus = async (req, res) => {
 
     const updatedStatus = status === "Approved" ? "Scheduled" : "Denied";
 
-    // Use new service
     const updatedRecord = await backlogService.updateProposalStatus(id, updatedStatus, comment);
 
-    // Log activity
     const [backlogRow] = await db.query("SELECT * FROM backlogs WHERE id = ?", [id]);
     const backlog = backlogRow[0];
     const message = `Admin updated proposal for "${backlog.name}" to "${updatedStatus}"`;
     await db.query("INSERT INTO ActivityLog (message) VALUES (?)", [message]);
 
-    // Emit updated backlogs
     const io = req.io;
     if (io) {
       const updatedBacklogs = await backlogService.getBacklogs({});
@@ -377,14 +435,14 @@ exports.getStaffRequestsByStaffId = async (req, res) => {
       WHERE b.staff_id = ?
         AND (b.status = 'Pending' OR b.status = 'Scheduled')
       ORDER BY 
-        CASE WHEN b.sched_date IS NULL THEN 1 ELSE 0 END, -- pending first
+        CASE WHEN b.sched_date IS NULL THEN 1 ELSE 0 END,
         b.sched_date ASC,
         b.created_at DESC
       `,
       [staffId]
     );
 
-    res.json(rows); // staff’s own meeting requests only
+    res.json(rows);
   } catch (err) {
     console.error("Error fetching requests:", err);
     res.status(500).json({ error: "Database error" });

@@ -8,7 +8,6 @@ const db = require('../db');
 exports.getAllStaffs = async (req, res) => {
   try {
     const staffs = await staffService.getAllStaffs();
-    console.log("From services: ", staffs)
     return res.status(200).json(staffs);
   } catch (error) {
     console.error("Error fetching staffs:", error);

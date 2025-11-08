@@ -26,7 +26,6 @@ const client = new dialogflow.SessionsClient({
 // This function will handle the Dialogflow interaction
 async function getDialogflowResponse(userMessage, userId) {
   try {
-    console.log(`🤖 Starting Dialogflow request for user ${userId}: "${userMessage}"`);
     
     // Generate a unique session ID based on userId
     const sessionId = `session-${userId}-${Date.now()}`;
@@ -34,8 +33,6 @@ async function getDialogflowResponse(userMessage, userId) {
     // Create the session path using the project_id from credentials
     const sessionPath = client.projectAgentSessionPath(credentials.project_id, sessionId);
     
-    console.log('📍 Session Path:', sessionPath);
-    console.log('💬 User Message:', userMessage);
 
     const request = {
       session: sessionPath,
@@ -47,7 +44,6 @@ async function getDialogflowResponse(userMessage, userId) {
       },
     };
 
-    console.log('📤 Sending request to Dialogflow...');
 
     // Add timeout to the Dialogflow request
     const timeoutPromise = new Promise((_, reject) => {
@@ -61,15 +57,8 @@ async function getDialogflowResponse(userMessage, userId) {
     
     const result = responses[0].queryResult;
     
-    console.log('✅ Dialogflow response received:', {
-      fulfillmentText: result.fulfillmentText,
-      intent: result.intent?.displayName || 'Unknown',
-      confidence: result.intentDetectionConfidence
-    });
-    
     const responseText = result.fulfillmentText || 'I apologize, but I couldn\'t understand your message. Could you please rephrase it?';
     
-    console.log('📝 Final response text:', responseText);
     return responseText;
     
   } catch (error) {
@@ -82,7 +71,6 @@ async function getDialogflowResponse(userMessage, userId) {
     
     // Return a fallback response instead of throwing an error
     const fallbackResponse = 'I\'m currently experiencing technical difficulties. Please try again in a moment.';
-    console.log('🔄 Returning fallback response:', fallbackResponse);
     return fallbackResponse;
   }
 }
@@ -90,7 +78,6 @@ async function getDialogflowResponse(userMessage, userId) {
 // Test function to verify Dialogflow connection
 async function testDialogflowConnection() {
   try {
-    console.log('Testing Dialogflow connection...');
     const response = await getDialogflowResponse('Hello', 'test-user');
     console.log('Test response:', response);
     return true;

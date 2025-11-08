@@ -61,10 +61,6 @@ exports.addFood = async (petId, increments) => {
   let currentFoodStack = currentPet[0].food_stack || 0;  // Default to 0 if it's null
   let currentCoins = currentPet[0].coins || 0;  // Default to 0 if it's null
 
-  console.log("Current Food Stack: ", currentFoodStack);
-  console.log("Current Coins: ", currentCoins);
-  console.log("Increment: ", increments);
-
   // Validate the increment value
   if (increments !== 1 && increments !== 5) {
     throw new Error('Invalid increment for food. Only 1 or 5 is allowed.');

@@ -23,11 +23,16 @@ const upload = multer({ storage });
 // Create a backlog event (for both student and admin)
 router.post("/", backlogController.createBacklog);
 
+// Create a proposal request
 router.post("/request", upload.single("file"), backlogController.createRequest);
 
 // Update a backlog event (only admin allowed)
 router.put("/:id", backlogController.updateBacklog);
 
+// NEW: Update proposal (for edit and repropose actions)
+router.put("/proposal/:id", upload.single("file"), backlogController.updateProposal);
+
+// Update proposal status (Approve/Deny)
 router.patch("/update-status/:id", backlogController.updateProposalStatus);
 
 // Retrieve backlog events
@@ -37,6 +42,6 @@ router.get("/student-requests/:staffId", backlogController.getRequestsByStaffId)
 router.get("/staff-requests/:staffId", backlogController.getStaffRequestsByStaffId);
 
 // Delete a backlog event (only admin allowed)
-router.delete("/:id", backlogController.deleteBacklog); // Add this route
+router.delete("/:id", backlogController.deleteBacklog);
 
 module.exports = router;

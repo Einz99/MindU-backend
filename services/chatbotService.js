@@ -4,26 +4,18 @@ const { getDialogflowResponse } = require('../dialogflowService');
 
 exports.handleChat = async (userMessage, userId, io) => {
   try {
-    console.log(`Handling chat for user ${userId}: ${userMessage}`);
     
     // 1. Store the user message in the database (Promise-based)
-    console.log('Step 1: Storing user message in database...');
     const insertUserMessageQuery = 'INSERT INTO chatbot_history (student_id, is_from_bot, message) VALUES (?, ?, ?)';
     
     const userInsertResult = await db.execute(insertUserMessageQuery, [userId, false, userMessage]);
-    console.log('User message stored successfully, ID:', userInsertResult[0].insertId);
 
     // 2. Get the bot response from Dialogflow
-    console.log('Step 2: Getting response from Dialogflow...');
     const botResponse = await getDialogflowResponse(userMessage, userId);
-    console.log('Bot response received:', botResponse);
 
-    // 3. Store the bot response in the database (Promise-based)
-    console.log('Step 3: Storing bot response in database...');
     const insertBotMessageQuery = 'INSERT INTO chatbot_history (student_id, is_from_bot, message) VALUES (?, ?, ?)';
     
     const botInsertResult = await db.execute(insertBotMessageQuery, [userId, true, botResponse]);
-    console.log('Bot message stored successfully, ID:', botInsertResult[0].insertId);
 
     // 4. Emit the bot response to the frontend via Socket.IO
     if (io) {
@@ -32,10 +24,7 @@ exports.handleChat = async (userMessage, userId, io) => {
         message: botResponse,
         isBot: true,
       });
-      console.log('Bot response emitted via Socket.IO');
     }
-
-    console.log('Chat handling completed successfully');
     return botResponse;
     
   } catch (error) {
@@ -44,10 +33,8 @@ exports.handleChat = async (userMessage, userId, io) => {
     // Store error message in database
     const errorMessage = 'I apologize, but I encountered an error processing your request. Please try again.';
     try {
-      console.log('Storing error message...');
       const insertErrorMessageQuery = 'INSERT INTO chatbot_history (student_id, is_from_bot, message) VALUES (?, ?, ?)';
       await db.execute(insertErrorMessageQuery, [userId, true, errorMessage]);
-      console.log('Error message stored successfully');
 
       // Emit error message via Socket.IO
       if (io) {
@@ -179,7 +166,6 @@ exports.updateStatus = async (userId) => {
   `;
 
   const [updateResult] = await db.query(updateQuery, [userId]);
-  console.log(updateResult.affectedRows);
 
   return updateResult.affectedRows;
 }
@@ -192,7 +178,6 @@ exports.deactivate = async (userId) => {
   `;
 
   const [updateResult] = await db.query(updateQuery, [userId]);
-  console.log(updateResult.affectedRows);
 
   return updateResult.affectedRows;
 }
@@ -204,7 +189,6 @@ exports.insertChatMessage = async (student_id, message, is_from_office) => {
       VALUES (?, ?, ?);
     `;
     await db.execute(insertQuery, [student_id, is_from_office, message]);
-    console.log('Message inserted into office_chat table');
   } catch (error) {
     console.error('Error inserting chat message:', error);
     throw error; // Rethrow error to be handled in the controller
@@ -233,8 +217,6 @@ exports.addAlert = async (studentId) => {
       
       const [result] = await db.query(insertQuery, [studentId]);
       
-      console.log(`✅ First alert recorded for student ${studentId}`);
-      
       return {
         success: true,
         message: 'First alert successfully registered',
@@ -250,7 +232,6 @@ exports.addAlert = async (studentId) => {
     
     // If less than 60 seconds have passed, don't add new alert
     if (timeDifference < 60) {
-      console.log(`⏳ Alert cooldown active for student ${studentId}. ${Math.round(60 - timeDifference)}s remaining.`);
       return {
         success: false,
         message: 'Alert cooldown active. Please wait before triggering another alert.',
@@ -265,8 +246,6 @@ exports.addAlert = async (studentId) => {
     `;
     
     const [result] = await db.query(insertQuery, [studentId]);
-    
-    console.log(`✅ Alert added for student ${studentId}`);
     
     return {
       success: true,

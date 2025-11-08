@@ -1,5 +1,6 @@
 require("dotenv").config();
 const express = require("express");
+const compression = require("compression");
 const cors = require("cors");
 const bodyParser = require("body-parser");
 const path = require("path");
@@ -148,7 +149,6 @@ app.use("/api/chatbotSettings", (req, res, next) => {
 
 // SINGLE WebSocket Connection Handler
 io.on("connection", (socket) => {
-  console.log(`🟢 Client connected: ${socket.id}`);
 
   // When a student joins the chat
   socket.on('join-chat', (student_id) => {
@@ -163,13 +163,11 @@ io.on("connection", (socket) => {
       staffSockets: [] // List of agent sockets that have joined this student's room
     };
     
-    console.log(`Student ${student_id} joined room: ${roomName}`);
   });
 
   // When a staff member (agent) joins - mark them as an agent
   socket.on('join-agent', () => {
     socket.isAgent = true; // Mark this socket as an agent
-    console.log(`Agent socket marked: ${socket.id}`);
   });
 
   // When agent joins a specific student room
@@ -192,7 +190,6 @@ io.on("connection", (socket) => {
       activeSessions[student_id].staffSockets.push(socket.id);
     }
     
-    console.log(`Agent ${socket.id} joined room: ${roomName}. Total agents: ${activeSessions[student_id].staffSockets.length}`);
     
     // Notify this agent about the room status
     socket.emit('agent-room-status', {
@@ -218,7 +215,6 @@ io.on("connection", (socket) => {
     const { student_id } = data;
     const roomName = `student-${student_id}`;
     
-    console.log(`🤝 Agent ${socket.id} accepted chat for student ${student_id}`);
     
     if (!activeSessions[student_id]) {
       activeSessions[student_id] = {
@@ -254,7 +250,6 @@ io.on("connection", (socket) => {
     const { student_id } = data;
     const roomName = `student-${student_id}`;
     
-    console.log(`🔌 Agent ${socket.id} is disconnecting for student ${student_id}`);
     
     // Update active session to set agent as not available
     if (activeSessions[student_id]) {
@@ -275,15 +270,12 @@ io.on("connection", (socket) => {
       isAgentAvailable: activeSessions[student_id]?.staffSockets.length > 0
     });
 
-    console.log(`✅ Emitted agent-disconnection to room ${roomName}`);
   });
 
   // When a student sends a message
   socket.on('student-message', (data) => {
     const { student_id, message } = data;
     const roomName = `student-${student_id}`;
-
-    console.log(`📨 Student ${student_id} sent message:`, message);
 
     // Emit to the student's room (includes student and any agents in the room)
     io.to(roomName).emit('new-chat-message', {
@@ -292,7 +284,6 @@ io.on("connection", (socket) => {
       is_from_office: false
     });
 
-    console.log(`✅ Emitted message to room ${roomName}`);
   });
 
   // When a staff member replies to the student
@@ -300,7 +291,6 @@ io.on("connection", (socket) => {
     const { student_id, message } = data;
     const roomName = `student-${student_id}`;
 
-    console.log(`📨 Agent ${socket.id} sent message to student ${student_id}:`, message);
 
     // Emit the reply to the student's room
     io.to(roomName).emit('new-chat-message', {
@@ -309,12 +299,10 @@ io.on("connection", (socket) => {
       is_from_office: true
     });
 
-    console.log(`✅ Emitted agent message to room ${roomName}`);
   });
 
   // Handle disconnections and clean up the session
   socket.on("disconnect", () => {
-    console.log(`🔴 Client disconnected: ${socket.id}`);
 
     // Clean up the session and remove from active sessions
     for (const [student_id, session] of Object.entries(activeSessions)) {
@@ -329,7 +317,6 @@ io.on("connection", (socket) => {
           activeSessions[student_id].isAgentAvailable = false;
         }
 
-        console.log(`Cleaned up socket ${socket.id} from student ${student_id}. Remaining agents: ${activeSessions[student_id].staffSockets.length}`);
         break;
       }
     }
@@ -338,8 +325,8 @@ io.on("connection", (socket) => {
 
 // Test endpoint
 app.get('/test', (req, res) => {
-    console.log('Received request for /test');
-    res.send('Connected successfully');
+    console.log('Received request for /test ronald villarde marked.');
+    res.send('Connected successfully ronald villarde marked.');
 });
 
 let sleepingPets = {};  
@@ -347,7 +334,6 @@ let sleepingPets = {};
 app.post('/toggle-pet-sleep', async (req, res) => {
     const { petId, isSleep } = req.body;
     try {
-        console.log(`Received sleep status update for pet ${petId}: ${isSleep ? "Sleeping" : "Awake"}`);
 
         // Update the pet's sleep state in memory or database
         if (isSleep) {
@@ -395,6 +381,17 @@ cron.schedule('*/10 * * * *', async () => {
   }
 });
 
+app.use(compression({
+  level: 6,
+  threshold: 0,
+  filter: (req, res) => {
+    if (req.headers['x-no-compression']) {
+      return false;
+    }
+    return compression.filter(req, res);
+  }
+}));
+
 app.use('/play-pet', express.static(path.join(__dirname, 'petGame'), {
     setHeaders: (res, filePath) => {
         // Set correct MIME types for Unity WebGL files
@@ -421,7 +418,6 @@ app.use('/play-pet', express.static(path.join(__dirname, 'petGame'), {
 // Route for playing pet game with student ID
 app.get('/play-pet/:id', (req, res) => {
     const studentId = req.params.id;
-    console.log(`🎮 Opening pet game for student ID: ${studentId}`);
     
     // Send the Unity index.html
     // The Unity game will extract the ID from the URL automatically
@@ -439,6 +435,18 @@ const getLocalIP = () => {
   }
   return 'localhost';
 };
+
+// ✨✨✨ ADD THESE TWO BLOCKS HERE ✨✨✨
+
+// Serve React static build files
+app.use(express.static(path.join(__dirname, 'build')));
+
+// Handle React routing - MUST be last!
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'build', 'index.html'));
+});
+
+// ✨✨✨ END OF NEW CODE ✨✨✨
 
 // Start server
 server.listen(PORT, () => {

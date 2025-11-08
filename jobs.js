@@ -3,7 +3,6 @@ const db = require('./db');
 
 // ⏱ Run every 15 minutes
 cron.schedule('*/15 * * * *', async () => {
-  console.log('🕒 Running missed status update job:', new Date().toLocaleString());
 
   try {
     const [result] = await db.query(`
@@ -15,7 +14,6 @@ cron.schedule('*/15 * * * *', async () => {
         AND NOW() >= DATE_ADD(sched_date, INTERVAL 1 HOUR)
     `);
 
-    console.log(`✅ Marked ${result.affectedRows} backlog(s) as Missed.`);
   } catch (error) {
     console.error('❌ Error updating missed backlogs:', error.message);
   }
@@ -29,7 +27,6 @@ cron.schedule('*/10 * * * *', async () => {
 
   // Check if the current time is aligned with 10-minute intervals (like 6:10, 6:20, etc.)
   if (minutes % 10 === 0) {
-    console.log(`🕒 Running pet status update job at ${currentTime.toLocaleString()}`);
 
     try {
       // Decrease hunger by 5 and hygiene by 3 for all pets
@@ -42,8 +39,7 @@ cron.schedule('*/10 * * * *', async () => {
           sleep = GREATEST(sleep - 5, 0)
         WHERE student_id IS NOT NULL  -- Ensure it's an actual pet (having student_id)
       `);
-
-      console.log(`✅ Updated ${result.affectedRows} pet(s) hunger and hygiene.`);
+      
     } catch (error) {
       console.error('❌ Error updating pet status:', error.message);
     }

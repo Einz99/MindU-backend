@@ -5,7 +5,6 @@ const db = require('../db');
 exports.getPetByStudentId = async (req, res) => {
   try {
     const { id } = req.params; // Get the student_id from the URL params
-    console.log(id);
     const pets = await petService.getPetByStudentId(id); // Call service to get pets by student_id
     
     if (!pets || pets.length === 0) {
@@ -29,7 +28,6 @@ exports.getPetByStudentId = async (req, res) => {
 };
 
 exports.insertPet = async (req, res) => {
-  console.log("Inserting Pet");
 
   try {
     const { student_id, pet_name, pet_type } = req.body; // Get data from request body
@@ -175,7 +173,6 @@ exports.addToy = async (req, res) => {
 // Controller method to get the toy for a specific pet
 exports.getToy = async (req, res) => {
   const petId = req.params.id;  // Pet ID from the URL parameter
-  console.log("accessing get toy");
   try {
     // Call the service to get the toy's details
     const toy = await petService.getToy(petId);
@@ -297,7 +294,6 @@ exports.buyAccessory = async (req, res) => {
 exports.updateAccessory = async (req, res) => {
   const petId = req.params.petId;
   const { accessory_id, accessory_category } = req.body;
-  console.log("accessing update of accessories");
   
   // Validate input
   if (accessory_id === undefined || !accessory_category) {
@@ -359,14 +355,6 @@ exports.updatePlay = async (req, res) => {
   try {
     const petId = req.params.id; // ← FIX: Use req.params.id (from route /:id)
     const { increment, result } = req.body;
-
-    // ADD THIS DEBUG LOGGING
-    console.log('Received params:', { petId, increment, result });
-    console.log('Types:', { 
-      petId: typeof petId, 
-      increment: typeof increment, 
-      result: typeof result 
-    });
 
     if (isNaN(increment) || increment === null || increment === undefined) {
       return res.status(400).json({ message: "Invalid increment value" }); // ← FIX: return response
