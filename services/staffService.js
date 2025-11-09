@@ -147,3 +147,81 @@ exports.updateForgotPassword = async (email, newPassword) => {
   const [result] = await db.query(sql, [hashedPassword, newPassword.length, email]);
   return result.affectedRows; // returns 1 if updated, 0 if not found
 }
+
+exports.bulkInsertAdvisers = async (staffs) => {
+  const { Resend } = require('resend');
+  const resend = new Resend(process.env.RESEND_API_KEY);
+  const crypto = require('crypto');
+
+  if (!Array.isArray(staffs) || staffs.length === 0) {
+    throw new Error("Invalid adviser data.");
+  }
+
+  const formattedAdvisers = staffs.map(staff => {
+    const password = crypto.randomBytes(5).toString("hex");
+    return {
+      name: staff.name || null,
+      email: staff.email || null,
+      password,
+      passwordLength: password.length,
+      section: staff.section || null,
+      randomPassword: password,
+    };
+  });
+
+  const emails = formattedAdvisers.map(s => s.email).filter(Boolean);
+  if (emails.length === 0) throw new Error("No valid emails provided.");
+
+  const [existingStaffs] = await db.query(
+    "SELECT email FROM staffs WHERE email IN (?)",
+    [emails]
+  );
+
+  const existingEmails = new Set(existingStaffs.map(s => s.email));
+  const newStaffs = formattedAdvisers.filter(s => !existingEmails.has(s.email));
+
+  if (newStaffs.length === 0) {
+    return {
+      insertedCount: 0,
+      skippedCount: staffs.length,
+      message: "All advisers already exist.",
+    };
+  }
+
+  const sql = `INSERT INTO staffs (name, email, password, passwordLength, position, section) VALUES ?`;
+  const values = newStaffs.map(s => [
+    s.name,
+    s.email,
+    s.password,
+    s.password.length,
+    "Adviser",
+    s.section
+  ]);
+
+  const [result] = await db.query(sql, [values]);
+
+  // Send emails with Resend (asynchronously)
+  for (const newStaff of newStaffs) {
+    resend.emails.send({
+      from: 'MindU <onboarding@resend.dev>',
+      to: newStaff.email,
+      subject: 'Welcome to MindU',
+      html: `
+        <p>Welcome ${newStaff.name},</p>
+        <p>Your account has been created successfully.</p>
+        <p><strong>Temporary Password:</strong> <code>${newStaff.randomPassword}</code></p>
+        <p>Please change it immediately after login.</p>
+        <p>Best regards,</p>
+        <p>The MindU Team</p>
+        <p><em>Note: This is an automated message, please do not reply.</em></p>
+      `,
+    }).catch(err => {
+      console.error(`Failed to send email to ${newStaff.email}:`, err);
+    });
+  }
+
+  return {
+    insertedCount: result.affectedRows,
+    skippedCount: staffs.length - newStaffs.length,
+  };
+};
