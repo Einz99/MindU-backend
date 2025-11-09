@@ -1,7 +1,33 @@
 // File: controllers/studentController.js
 const studentService = require('../services/studentService');
 const db = require('../db');
-const nodemailer = require("nodemailer");
+const { Resend } = require('resend');
+
+// Initialize Resend
+const resend = new Resend(process.env.RESEND_API_KEY);
+
+// Helper function to send welcome email
+async function sendWelcomeEmail(student) {
+  try {
+    await resend.emails.send({
+      from: 'MindU <onboarding@resend.dev>', // Use your verified domain later
+      to: student.email,
+      subject: 'Welcome to MindU',
+      html: `
+        <p>Welcome ${student.firstName} ${student.lastName},</p>
+        <p>Your account has been created successfully.</p>
+        <p>Your temporary password is <strong>${student.randomPassword}</strong>. Please change it immediately.</p>
+        <p>Best regards,</p>
+        <p>The MindU Team</p>
+        <p><em>Note: This is an automated message, please do not reply.</em></p>
+      `,
+    });
+    console.log(`Welcome email sent to ${student.email}`);
+  } catch (error) {
+    console.error(`Failed to send welcome email to ${student.email}:`, error);
+    // Don't throw - we don't want email failure to break student creation
+  }
+}
 
 exports.getAllStudents = async (req, res) => {
   try {
@@ -49,24 +75,9 @@ exports.createStudent = async (req, res) => {
       [message]
     );
 
-    const transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
-      },
-    });
-
-    await transporter.sendMail({
-      from: `"MindU Support" <${process.env.EMAIL_USER}>`,
-      to: newStudent.email,
-      subject: 'Welcome to MindU',
-      html: `<p>Welcome ${newStudent.firstName} ${newStudent.lastName},</p>
-             <p>Your account has been created successfully.</p>
-             <p>Your temporary password is ${newStudent.randomPassword}. Please change it immediately.</p>
-             <p>Best regards,</p>
-             <p>The MindU Team</p>
-             <p>Note: This is an automated message, please do not reply.</p>`,
+    // Send welcome email asynchronously (don't block response)
+    sendWelcomeEmail(newStudent).catch(err => {
+      console.error('Email sending failed, but student created:', err);
     });
 
     return res.status(201).json({
@@ -116,7 +127,6 @@ exports.updateStudent = async (req, res) => {
     return res.status(500).json({ message: "Server error", error: error.message });
   }
 };
-
 
 exports.deleteStudent = async (req, res) => {
   try {

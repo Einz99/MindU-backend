@@ -4,7 +4,10 @@ const fs = require("fs");
 const db = require("../db");
 const bcrypt = require('bcrypt');
 const crypto = require("crypto");
+const { Resend } = require('resend');
 
+// Initialize Resend
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 const UPLOAD_DIR = path.join(__dirname, "../resources/profile_pics");
 
@@ -62,18 +65,18 @@ exports.updateStaff = async (id, staffData) => {
     WHERE ID = ?
   `;
   const [result] = await db.query(sql, [name, email, hashedPassword, passwordLength, position, section, id]);
-  return result.affectedRows; // returns 1 if updated, 0 if not found
+  return result.affectedRows;
 }
 
 exports.deleteStaff = async (id) => {
   const [result] = await db.query("DELETE FROM staffs WHERE ID = ?", [id]);
-  return result.affectedRows; // returns 1 if deleted, 0 if not found
+  return result.affectedRows;
 };
 
 exports.updateStaffEmail = async (id, email) => {
   const sql = "UPDATE staffs SET email = ?, modified_at = NOW() WHERE ID = ?";
   const [result] = await db.query(sql, [email, id]);
-  return result.affectedRows; // returns 1 if updated, 0 if not found
+  return result.affectedRows;
 }
 
 exports.updateStaffPassword = async (id, newPassword) => {
@@ -89,10 +92,9 @@ exports.updateStaffPassword = async (id, newPassword) => {
     await db.query(sql, [hashedNewPassword, newPassword.length, id]);
   } catch (error) {
     console.error("Failed to update password:", error);
-    throw error; // Let controller handle the response
+    throw error;
   }
 };
-
 
 exports.updateStaffPicture = async (id, newPictureFilename) => {
   // Step 1: Get current staff
@@ -117,12 +119,11 @@ exports.updateStaffPicture = async (id, newPictureFilename) => {
 
   // Return the full path of the newly updated picture
   if (result.affectedRows > 0) {
-    // Assuming RootAPI is the base URL of your server
     const picturePath = `${newPictureFilename}`;
     return picturePath;
   }
 
-  return null; // If no rows were updated, return null
+  return null;
 };
 
 exports.getStaffByEmail = async (email) => {
@@ -145,27 +146,26 @@ exports.updateForgotPassword = async (email, newPassword) => {
     WHERE email = ?
   `;
   const [result] = await db.query(sql, [hashedPassword, newPassword.length, email]);
-  return result.affectedRows; // returns 1 if updated, 0 if not found
+  return result.affectedRows;
 }
 
 exports.bulkInsertAdvisers = async (staffs) => {
-  const { Resend } = require('resend');
-  const resend = new Resend(process.env.RESEND_API_KEY);
-  const crypto = require('crypto');
-
   if (!Array.isArray(staffs) || staffs.length === 0) {
     throw new Error("Invalid adviser data.");
   }
 
+  // Format advisers with proper password hashing
   const formattedAdvisers = staffs.map(staff => {
-    const password = crypto.randomBytes(5).toString("hex");
+    const randomPassword = crypto.randomBytes(5).toString("hex");
+    const hashedPassword = bcrypt.hashSync(randomPassword, 10);
+    
     return {
       name: staff.name || null,
       email: staff.email || null,
-      password,
-      passwordLength: password.length,
+      password: hashedPassword, // Store hashed password
+      passwordLength: randomPassword.length,
       section: staff.section || null,
-      randomPassword: password,
+      randomPassword: randomPassword, // for email only
     };
   });
 
@@ -192,8 +192,8 @@ exports.bulkInsertAdvisers = async (staffs) => {
   const values = newStaffs.map(s => [
     s.name,
     s.email,
-    s.password,
-    s.password.length,
+    s.password, // hashed password
+    s.passwordLength,
     "Adviser",
     s.section
   ]);

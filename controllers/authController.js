@@ -3,8 +3,11 @@ const path = require("path");
 const fs = require("fs");
 const jwt = require("jsonwebtoken");
 const db = require("../db");
-const nodemailer = require("nodemailer");
-// const bcrypt = require("bcrypt");
+const bcrypt = require("bcrypt");
+const { Resend } = require('resend');
+
+// Initialize Resend
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 const broadcastUpdates = async (io, userId) => {
   if (!io) {
@@ -13,7 +16,7 @@ const broadcastUpdates = async (io, userId) => {
   }
 
   try {
-    io.emit("updateStudent", userId); // Emit the latest state of resources
+    io.emit("updateStudent", userId);
   } catch (error) {
     console.error("❌ Error broadcasting updates:", error);
   }
@@ -38,7 +41,6 @@ exports.login = async (req, res) => {
   const { identifier, password } = req.body;
   const sql = "SELECT * FROM students WHERE email = ?";
   try {
-    // Await the query result (no callback)
     const [results] = await db.query(sql, [identifier]);
     if (results.length === 0) {
       return res.status(401).json({ message: "User not found" });
@@ -46,14 +48,9 @@ exports.login = async (req, res) => {
 
     const user = results[0];
 
-    // BCRYPT: If using bcrypt, uncomment the lines below:
-    // const isMatch = bcrypt.compareSync(password, user.password);
-    // if (!isMatch) {
-    //     return res.status(401).json({ message: "Incorrect password" });
-    // }
-
-    // Temporary plain text password check
-    if (password !== user.password) {
+    // Compare password with bcrypt
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
       return res.status(401).json({ message: "Incorrect password" });
     }
 
@@ -78,7 +75,7 @@ exports.login = async (req, res) => {
 };
 
 exports.googleLogin = async (req, res) => {
-  const { email } = req.body; // this comes from Google
+  const { email } = req.body;
 
   try {
     const [results] = await db.query("SELECT * FROM students WHERE email = ?", [email]);
@@ -171,13 +168,17 @@ exports.updatePassword = async (req, res) => {
     const userId = decoded.id;
     const { password, firstLogin } = req.body;
 
-    // BCRYPT: If using bcrypt, uncomment the lines below:
-    // let hashedPassword = password ? await bcrypt.hash(password, 10) : null;
+    if (!password) {
+      return res.status(400).json({ message: "Password is required" });
+    }
 
-    const sql = "UPDATE students SET password = ?, firstLogin = ? WHERE id = ?";
-    const [result] = await db.query(sql, [password, firstLogin, userId]);
+    // Hash the password with bcrypt
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const passwordLength = password.length;
+
+    const sql = "UPDATE students SET password = ?, passwordLength = ?, firstLogin = ? WHERE id = ?";
+    const [result] = await db.query(sql, [hashedPassword, passwordLength, firstLogin, userId]);
     
-    // Add broadcast update
     await broadcastUpdates(req.io, userId);
     return res.json({ success: true, message: "Password updated successfully" });
   } catch (error) {
@@ -188,41 +189,46 @@ exports.updatePassword = async (req, res) => {
 
 const resetCodes = new Map();
 
+// Helper function to send reset code email
+async function sendResetCodeEmail(email, code) {
+  try {
+    await resend.emails.send({
+      from: 'MindU <onboarding@resend.dev>',
+      to: email,
+      subject: 'Password Reset Code',
+      html: `
+        <p>Your verification code is <strong>${code}</strong>. It expires in 10 minutes.</p>
+        <p>If you did not request this, please ignore this email.</p>
+        <p>Best regards,</p>
+        <p>The MindU Team</p>
+        <p><em>Note: This is an automated message, please do not reply.</em></p>
+      `,
+    });
+    console.log(`Reset code email sent to ${email}`);
+  } catch (error) {
+    console.error(`Failed to send reset code to ${email}:`, error);
+    throw error;
+  }
+}
+
 exports.sendCode = async (req, res) => {
-  const {email} = req.body;
+  const { email } = req.body;
   if (!email) {
-    return res.status(400).json({ message: "Email is required"});
+    return res.status(400).json({ message: "Email is required" });
   }
 
-  let query = "SELECT * FROM students WHERE email = ?"
+  const query = "SELECT * FROM students WHERE email = ?";
 
   try {
-    const user = await db.query(query, [email]);
-    if(!user) { 
-      return res.status(400).json({ message: "User does not exist" })
+    const [user] = await db.query(query, [email]);
+    if (!user || user.length === 0) { 
+      return res.status(404).json({ message: "User does not exist" });
     }
 
     const code = Math.floor(1000 + Math.random() * 9000).toString(); // 4-digit code
     resetCodes.set(email, code);
 
-    const transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
-      },
-    });
-
-    await transporter.sendMail({
-      from: `"MindU Support" <${process.env.EMAIL_USER}>`,
-      to: email,
-      subject: 'Password Reset Code',
-      html: `<p>Your verification code is <strong>${code}</strong>. It expires in 10 minutes.</p>
-      <p>If you did not request this, please ignore this email.</p>
-      <p>Best regards,</p>
-      <p>The MindU Team</p>
-      <p>Note: This is an automated message, please do not reply.</p>`,
-    });
+    await sendResetCodeEmail(email, code);
     
     setTimeout(() => { 
       resetCodes.delete(email);
@@ -233,10 +239,10 @@ exports.sendCode = async (req, res) => {
     console.error("Error sending verification code:", error);
     return res.status(500).json({ message: "Server error", error: error.message });
   }
-}
+};
 
 exports.verifyCode = async (req, res) => {
-  const { email, code } = req.body; // Get the email and code from the request body
+  const { email, code } = req.body;
   const storedCode = resetCodes.get(email);
 
   if (storedCode && storedCode === code) {
@@ -244,28 +250,31 @@ exports.verifyCode = async (req, res) => {
   } else {
     res.status(400).json({ valid: false, message: "Invalid or expired code" });
   }
-}
+};
 
 exports.forgotPassword = async (req, res) => {
   const { email, newPassword } = req.body;
 
   if (!newPassword || !email) {
-    return res
-      .status(400)
-      .json({ message: "Provide a new password and an email." });
+    return res.status(400).json({ message: "Provide a new password and an email." });
   }
 
-  // BCRYPT: If using bcrypt, uncomment the line below:
-  // const hashedPassword = await bcrypt.hash(newPassword, 10);
+  // Hash the password with bcrypt
+  const hashedPassword = await bcrypt.hash(newPassword, 10);
+  const passwordLength = newPassword.length;
 
-  let sql = "UPDATE students SET password = ? WHERE email = ?";
-  let params = [newPassword, email];
+  const sql = "UPDATE students SET password = ?, passwordLength = ? WHERE email = ?";
+  const params = [hashedPassword, passwordLength, email];
 
   try {
     const [results] = await db.query(sql, params);
     if (results.affectedRows === 0) {
       return res.status(404).json({ message: "User not found." });
     }
+    
+    // Clear the reset code after successful password reset
+    resetCodes.delete(email);
+    
     return res.status(200).json({ message: "Password reset successfully." });
   } catch (error) {
     console.error("Error updating password:", error);
