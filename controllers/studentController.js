@@ -17,6 +17,8 @@ async function sendWelcomeEmail(student) {
         <p>Welcome ${student.firstName} ${student.lastName},</p>
         <p>Your account has been created successfully.</p>
         <p>Your temporary password is <strong>${student.randomPassword}</strong>. Please change it immediately.</p>
+        <p>You can download the application:</p>
+        <a href="https://drive.google.com/uc?export=download&id=1XNv6eBFOb9sGGWu5VHIGIg_ZBCED4oyy" target="_blank">Download APK</a>
         <p>Best regards,</p>
         <p>The MindU Team</p>
         <p><em>Note: This is an automated message, please do not reply.</em></p>
