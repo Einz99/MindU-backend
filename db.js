@@ -16,6 +16,20 @@ const pool = mysql.createPool({
   dateStrings: true,
 });
 
+
+// Local host for Development and for fixing error comment top pool if going to do it and reverseback
+// const pool = mysql.createPool({
+//   host: process.env.DB_HOST,
+//   user: process.env.DB_USER,
+//   password: process.env.DB_PASS,
+//   database: process.env.DB_NAME,
+//   waitForConnections: true,
+//   connectionLimit: 10,
+//   queueLimit: 0,
+//   timezone: '+08:00',  // Manila timezone
+//   dateStrings: true,
+// });
+
 // Test connection on startup
 pool.getConnection()
   .then((connection) => {

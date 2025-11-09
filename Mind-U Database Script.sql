@@ -41,6 +41,10 @@ SHOW TABLES;
 INSERT INTO staffs (name, email, password, passwordLength, position)
 VALUES ('Ronald Villarde','ronaldvillarde999@gmail.com', '1234567890', 10, 'Admin');
 
+UPDATE staffs
+SET position = "Adviser"
+WHERE id = 1;
+
 CREATE TABLE students (
 	id INT AUTO_INCREMENT PRIMARY KEY NOT NULL,
     email VARCHAR(255) NOT NULL UNIQUE,
@@ -188,7 +192,6 @@ CREATE TABLE pets (
     coins INT NOT NULL DEFAULT 100,  -- Starting coins
     food_stack INT DEFAULT 5,  -- Starting food
     pet_head INT DEFAULT NULL,  -- Accessory ID for pet's head (NULL means no accessory) 1-4
-    pet_neck INT DEFAULT NULL,  -- Accessory ID for pet's neck 5-8
     pet_neck INT DEFAULT NULL,  -- Accessory ID for pet's neck 5-8
     pet_eyes INT DEFAULT NULL,  -- Accessory ID for pet's eyes 9-12
     hunger INT DEFAULT 100,  -- Pet's hunger level (0-100)
