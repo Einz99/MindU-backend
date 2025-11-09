@@ -6,16 +6,23 @@ async function setupDatabase() {
   let connection;
   
   try {
-    // Connect to Railway MySQL
-    connection = await mysql.createConnection(
-      process.env.MYSQL_URL || {
+    // Connect to Railway MySQL using PUBLIC URL (works from local machine)
+    // Railway provides MYSQL_PUBLIC_URL for external connections
+    const connectionString = process.env.MYSQL_PUBLIC_URL || process.env.MYSQL_URL;
+    
+    if (connectionString) {
+      console.log('🔗 Connecting using Railway MySQL URL...');
+      connection = await mysql.createConnection(connectionString);
+    } else {
+      console.log('🔗 Connecting using local MySQL...');
+      connection = await mysql.createConnection({
         host: process.env.DB_HOST || 'localhost',
         user: process.env.DB_USER || 'root',
         password: process.env.DB_PASS || '',
         database: process.env.DB_NAME || 'railway',
-        port: process.env.MYSQLPORT || 3306
-      }
-    );
+        port: 3306
+      });
+    }
 
     console.log('✅ Connected to MySQL database');
 

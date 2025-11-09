@@ -45,11 +45,16 @@ exports.createStaff = async (req, res) => {
 
     // Send welcome email (existing code)
     const transporter = nodemailer.createTransport({
-      service: 'gmail',
+      host: 'smtp.gmail.com',
+      port: 587,
+      secure: false, // true for 465, false for other ports
       auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS,
       },
+      tls: {
+        rejectUnauthorized: false // Only if you still have issues
+      }
     });
 
     await transporter.sendMail({
@@ -243,7 +248,7 @@ exports.exchangeCode = async (req, res) => {
         code,
         client_id: process.env.GOOGLE_CLIENT_ID,
         client_secret: process.env.GOOGLE_CLIENT_SECRET,
-        redirect_uri: 'https://mindu-backend-production.up.railway.app',  // Your frontend redirect URI
+        redirect_uri: 'http://localhost:3000',  // Your frontend redirect URI
         grant_type: 'authorization_code',
       },
     });

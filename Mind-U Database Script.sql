@@ -14,34 +14,32 @@ USE MindU;
 #DROP TABLE chatbot_history;
 #DROP TABLE office_chat
 
-
-
 #SELECTING TABLES
 SELECT * FROM students;
 SELECT * FROM staffs;
 SELECT * FROM announcements;
 SELECT * FROM resources;
 SELECT * FROM ActivityLog;
-SELECT * FROM backlogs WHERE student_id = 46;
+SELECT * FROM backlogs;
 SELECT * FROM mood_data;
 SELECT * FROM students_login;
 SELECT * FROM StudentActivityLog;
 SELECT * FROM chatbot_history;
 SELECT * FROM office_chat;
-
-SELECT * FROM students
-WHERE isAskingHelp = true;
-
-UPDATE students
-SET isAskingHelp = false, chatStatus = 'Completed'
-WHERE id = 622;
+SELECT * FROM alerts;
+SELECT * FROM pets;
+SELECT * FROM faqs;
+SELECT * FROM chatbotTriggers;
+SELECT * FROM pet_toys;
+SELECT * FROM pet_accessories;
+SELECT * FROM pet_bath_soap;
 
 #SHOW TABLES
 SHOW TABLES;
 
 # initial staff and super super admin
 INSERT INTO staffs (name, email, password, passwordLength, position)
-VALUES ('Mind-U','fssv.mindu@gmail.com', '1234567890', 10, 'Admin');
+VALUES ('Ronald Villarde','ronaldvillarde999@gmail.com', '1234567890', 10, 'Admin');
 
 CREATE TABLE students (
 	id INT AUTO_INCREMENT PRIMARY KEY NOT NULL,
@@ -75,11 +73,6 @@ CREATE TABLE staffs (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     modified_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
-
-SELECT * FROM students;
-
-INSERT staffs (name, email, password, passwordLength, position, section)
-VALUES ('Ribnan Mhay Sangalang', 'sangalangribnan12@gmail.com', '12345', 5, 'Adviser', 'BSIT 3-3');
 
 CREATE TABLE announcements (
 	ID INT AUTO_INCREMENT PRIMARY KEY NOT NULL,
@@ -186,11 +179,6 @@ CREATE TABLE studentActivityLog(
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 
-DESC studentActivityLog;
-
-SELECT * FROM studentActivityLog
-WHERE module = 'Chatbot';
-
 CREATE TABLE pets (
     id INT AUTO_INCREMENT PRIMARY KEY NOT NULL,
     student_id INT NOT NULL,
@@ -235,21 +223,6 @@ CREATE TABLE chatbotTriggers(
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
-SELECT * FROM chatbotTriggers;
-
-SELECT * FROM pets;
-
-TRUNCATE TABLE pet_toys;
-TRUNCATE TABLE pet_accessories;
-TRUNCATE TABLE pet_bath_soaps;
-TRUNCATE TABLE pets;
-
-SET FOREIGN_KEY_CHECKS = 0;
-TRUNCATE TABLE pets;
-TRUNCATE TABLE pet_logins;  -- Also truncate the child table
-SET FOREIGN_KEY_CHECKS = 1;
-
-
 CREATE TABLE pet_toys (
     pet_id INT NOT NULL,
     toy_type ENUM('toy_1', 'toy_2', 'toy_3', 'toy_4', 'toy_5', 'toy_6') NOT NULL,  -- Six different toys
@@ -284,20 +257,6 @@ CREATE TABLE alerts (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
-SELECT * FROM alerts;
-
-SELECT * FROM students;
-
-INSERT INTO alerts (student_id)
-VALUES (46), (46), (46), (47), (48), (47);
-
-ALTER TABLE resources 
-MODIFY COLUMN description TEXT NULL,
-MODIFY COLUMN filepath VARCHAR(10000) NULL;
-
-ALTER TABLE pets
-ADD COLUMN streak INT DEFAULT 0;
-
 -- Simple FAQ Table with draft/posted status
 CREATE TABLE faqs (
   ID INT PRIMARY KEY AUTO_INCREMENT,
@@ -320,10 +279,6 @@ CREATE TABLE chatbotTriggers(
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
-SELECT * FROM chatbotTriggers;
-
--- drop and create table again
-DROP TABLE studentActivityLog;
 
 -- Sample Data Insert (all active by default)
 INSERT INTO faqs (category, question, answer) VALUES
