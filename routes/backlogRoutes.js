@@ -5,6 +5,7 @@ const backlogController = require("../controllers/backlogController");
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
+const { compressImage, isImage } = require('../utils/imageCompression');
 
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
@@ -18,19 +19,46 @@ const storage = multer.diskStorage({
   }
 });
 
+const compressProposal = async (req, res, next) => {
+  try {
+    if (!req.file) return next();
+    
+    const finalDir = path.join(__dirname, '../public/request');
+    if (!fs.existsSync(finalDir)) {
+      fs.mkdirSync(finalDir, { recursive: true });
+    }
+    
+    const finalPath = path.join(finalDir, req.file.filename);
+    
+    if (isImage(req.file.mimetype)) {
+      console.log('[compressProposal] Compressing proposal image');
+      await compressImage(req.file, finalPath, 85);
+    } else {
+      // For PDFs, documents, etc. - just move
+      fs.renameSync(req.file.path, finalPath);
+      console.log('[compressProposal] Proposal document moved (no compression)');
+    }
+    
+    next();
+  } catch (error) {
+    console.error('[compressProposal] Error:', error);
+    next(error);
+  }
+};
+
 const upload = multer({ storage });
 
 // Create a backlog event (for both student and admin)
 router.post("/", backlogController.createBacklog);
 
 // Create a proposal request
-router.post("/request", upload.single("file"), backlogController.createRequest);
+router.post("/request", upload.single("file"), compressProposal, backlogController.createRequest);
 
 // Update a backlog event (only admin allowed)
 router.put("/:id", backlogController.updateBacklog);
 
 // NEW: Update proposal (for edit and repropose actions)
-router.put("/proposal/:id", upload.single("file"), backlogController.updateProposal);
+router.put("/proposal/:id", upload.single("file"), compressProposal, backlogController.updateProposal);
 
 // Update proposal status (Approve/Deny)
 router.patch("/update-status/:id", backlogController.updateProposalStatus);
