@@ -6,7 +6,6 @@ const db = require("../db");
 const bcrypt = require("bcrypt");
 const { Resend } = require('resend');
 const { compressAndResize, compressImage, isImage } = require('../utils/imageCompression');
-const fs = require('fs');
 
 // Initialize Resend
 const resend = new Resend(process.env.RESEND_API_KEY);
