@@ -285,7 +285,7 @@ exports.createRequest = async (req, res) => {
       return res.status(400).json({ error: "Missing required fields or file" });
     }
 
-    const relativePath = `request/${file.filename}`;
+    const relativePath = `/public/request/${file.filename}`;
     console.log('[createRequest] File uploaded:', relativePath);
 
     const [result] = await db.query(
@@ -343,7 +343,7 @@ exports.updateProposal = async (req, res) => {
 
       // Delete old proposal file if it exists
       if (original_proposal) {
-        const oldFilePath = path.join(__dirname, "../public", original_proposal);
+        const oldFilePath = path.join(__dirname, "../public", original_proposal.replace('/public/', ''));
         if (fs.existsSync(oldFilePath)) {
           fs.unlinkSync(oldFilePath);
           console.log('[updateProposal] Old proposal file deleted:', oldFilePath);

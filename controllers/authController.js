@@ -26,17 +26,15 @@ const broadcastUpdates = async (io, userId) => {
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const uploadPath = path.join(__dirname, "../resources/profile_pics");
-    console.log('[multer] Upload destination:', uploadPath);
+    const uploadPath = path.join(__dirname, "../public/profile_pics");
+    // ☝️ NOW SAVES TO /app/public/profile_pics
     if (!fs.existsSync(uploadPath)) {
       fs.mkdirSync(uploadPath, { recursive: true });
-      console.log('[multer] Created upload directory');
     }
     cb(null, uploadPath);
   },
   filename: (req, file, cb) => {
     const filename = `profile_${Date.now()}${path.extname(file.originalname)}`;
-    console.log('[multer] Generated filename:', filename);
     cb(null, filename);
   },
 });
@@ -181,7 +179,7 @@ exports.updateProfile = async (req, res) => {
       
       let profilePicPath = null;
       if (req.file) {
-        profilePicPath = `/resources/profile_pics/${req.file.filename}`;
+        const profilePicPath = `/public/profile_pics/${req.file.filename}`;
         console.log('[updateProfile] New profile picture uploaded:', profilePicPath);
       }
 
@@ -457,7 +455,7 @@ exports.updateProfilePic = async (req, res) => {
       
       // Delete old profile pic if exists and isn't default
       if (oldProfilePic && !oldProfilePic.includes('default')) {
-        const oldFilePath = path.join(__dirname, '..', oldProfilePic);
+        const oldFilePath = path.join(__dirname, '../public', oldProfilePic.replace('/public/', ''));
         if (fs.existsSync(oldFilePath)) {
           fs.unlinkSync(oldFilePath);
           console.log('[updateProfilePic] Old profile picture deleted:', oldFilePath);

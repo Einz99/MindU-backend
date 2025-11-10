@@ -9,7 +9,7 @@ const path = require("path");
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     // Save files to the 'resources' folder relative to your backend root
-    cb(null, path.join(__dirname, "../resources"));
+    cb(null, path.join(__dirname, "../public/resources"));
   },
   filename: (req, file, cb) => {
     // Prepend Date.now() to avoid filename collisions

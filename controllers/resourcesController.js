@@ -153,7 +153,7 @@ exports.createResource = async (req, res) => {
 
     if (req.files) {
       if (req.files["file"] && req.files["file"][0]) {
-        filepath = "/resources/" + req.files["file"][0].filename;
+        filepath = "/public/resources/" + req.files["file"][0].filename;
 
         console.log('[createResource] File uploaded', {
           timestamp: new Date().toISOString(),
@@ -181,7 +181,7 @@ exports.createResource = async (req, res) => {
       }
 
       if (req.files["banner"] && req.files["banner"][0]) {
-        bannerPath = "/resources/" + req.files["banner"][0].filename;
+        bannerPath = "/public/resources/" + req.files["banner"][0].filename;
         
         console.log('[createResource] Banner uploaded', {
           timestamp: new Date().toISOString(),
@@ -288,7 +288,7 @@ exports.updateResource = async (req, res) => {
     if (req.files) {
       if (req.files["file"] && req.files["file"][0]) {
         const oldFilePath = currentResource.filepath;
-        filepath = "/resources/" + req.files["file"][0].filename;
+        filepath = "/public/resources/" + req.files["file"][0].filename;
 
         console.log('[updateResource] New file uploaded', {
           timestamp: new Date().toISOString(),
@@ -299,7 +299,7 @@ exports.updateResource = async (req, res) => {
         });
 
         if (oldFilePath) {
-          const oldFilePathFull = path.join(__dirname, "../resources", oldFilePath);
+          const oldFilePathFull = path.join(__dirname, "../public/resources", oldFilePath.replace('/public/resources/', ''));
           if (fs.existsSync(oldFilePathFull)) {
             fs.unlink(oldFilePathFull, (err) => {
               if (err) {
@@ -323,7 +323,7 @@ exports.updateResource = async (req, res) => {
 
       if (req.files["banner"] && req.files["banner"][0]) {
         const oldBannerPath = currentResource.banner;
-        bannerPath = "/resources/" + req.files["banner"][0].filename;
+        bannerPath = "/public/resources/" + req.files["banner"][0].filename;
 
         console.log('[updateResource] New banner uploaded', {
           timestamp: new Date().toISOString(),
@@ -333,7 +333,7 @@ exports.updateResource = async (req, res) => {
         });
 
         if (oldBannerPath) {
-          fs.unlink(path.join(__dirname, "../resources", oldBannerPath), (err) => {
+          fs.unlink(path.join(__dirname, "../public/resources", oldBannerPath.replace('/public/resources/', '')), (err) => {
             if (err) {
               console.error('[updateResource] Failed to delete old banner', {
                 timestamp: new Date().toISOString(),
