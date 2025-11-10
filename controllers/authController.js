@@ -5,7 +5,6 @@ const jwt = require("jsonwebtoken");
 const db = require("../db");
 const bcrypt = require("bcrypt");
 const { Resend } = require('resend');
-const { compressAndResize, compressImage, isImage } = require('../utils/imageCompression');
 
 // Initialize Resend
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -27,14 +26,17 @@ const broadcastUpdates = async (io, userId) => {
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const uploadPath = path.join(__dirname, "../public/temp"); // Temp folder first
+    const uploadPath = path.join(__dirname, "../resources/profile_pics");
+    console.log('[multer] Upload destination:', uploadPath);
     if (!fs.existsSync(uploadPath)) {
       fs.mkdirSync(uploadPath, { recursive: true });
+      console.log('[multer] Created upload directory');
     }
     cb(null, uploadPath);
   },
   filename: (req, file, cb) => {
     const filename = `profile_${Date.now()}${path.extname(file.originalname)}`;
+    console.log('[multer] Generated filename:', filename);
     cb(null, filename);
   },
 });
@@ -155,71 +157,42 @@ exports.getUser = async (req, res) => {
   }
 };
 
-exports.updateProfilePic = async (req, res) => {
+exports.updateProfile = async (req, res) => {
+  console.log('[updateProfile] Profile update request received');
+  
   upload(req, res, async (err) => {
     const io = req.io;
     if (err) {
-      console.error('[updateProfilePic] File upload error:', err);
+      console.error('[updateProfile] File upload error:', err);
       return res.status(500).json({ message: "File upload error" });
     }
 
     const token = req.headers.authorization?.split(" ")[1];
     if (!token) {
-      console.log('[updateProfilePic] No token provided');
+      console.log('[updateProfile] No token provided');
       return res.status(401).json({ message: "No token provided" });
     }
 
     try {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
       const userId = decoded.id;
+      const { age, gender } = req.body;
+      console.log('[updateProfile] Updating profile for user:', userId, { age, gender });
       
-      if (!req.file) {
-        console.log('[updateProfilePic] No file uploaded');
-        return res.status(400).json({ message: "No file uploaded" });
+      let profilePicPath = null;
+      if (req.file) {
+        profilePicPath = `/resources/profile_pics/${req.file.filename}`;
+        console.log('[updateProfile] New profile picture uploaded:', profilePicPath);
       }
-      
-      // Compress the image
-      const finalPath = path.join(__dirname, "../public/profile_pics", req.file.filename);
-      const finalDir = path.join(__dirname, "../public/profile_pics");
-      
-      if (!fs.existsSync(finalDir)) {
-        fs.mkdirSync(finalDir, { recursive: true });
-      }
-      
-      await compressAndResize(req.file, finalPath, {
-        width: 500,  // Max width for profile pics
-        height: 500, // Max height
-        quality: 85  // Good quality, smaller size
-      });
-      
-      // Delete temp file
-      fs.unlinkSync(req.file.path);
-      
-      // Get current profile pic to delete
-      const [user] = await db.query("SELECT profilePic FROM students WHERE id = ?", [userId]);
-      const oldProfilePic = user[0]?.profilePic;
-      
-      const profilePicPath = `/public/profile_pics/${req.file.filename}`;
 
-      // Update database
-      await db.query("UPDATE students SET profilePic = ? WHERE id = ?", [profilePicPath, userId]);
-      
-      // Delete old profile pic
-      if (oldProfilePic && !oldProfilePic.includes('default')) {
-        const oldFilePath = path.join(__dirname, '../public', oldProfilePic.replace('/public/', ''));
-        if (fs.existsSync(oldFilePath)) {
-          fs.unlinkSync(oldFilePath);
-        }
-      }
+      const sql = "UPDATE students SET age = ?, gender = ?, profilePic = ? WHERE id = ?";
+      await db.query(sql, [age, gender, profilePicPath, userId]);
+      console.log('[updateProfile] Profile updated successfully');
 
       await broadcastUpdates(io, userId);
-      return res.json({ 
-        success: true, 
-        message: "Profile picture updated successfully", 
-        profilePicPath 
-      });
+      return res.json({ success: true, message: "Profile updated successfully", profilePicPath });
     } catch (error) {
-      console.error("[updateProfilePic] Error:", error);
+      console.error("[updateProfile] Error updating profile:", error);
       return res.status(500).json({ message: "Database error" });
     }
   });
@@ -484,7 +457,7 @@ exports.updateProfilePic = async (req, res) => {
       
       // Delete old profile pic if exists and isn't default
       if (oldProfilePic && !oldProfilePic.includes('default')) {
-        const oldFilePath = path.join(__dirname, '../public', oldProfilePic.replace('/public/', ''));
+        const oldFilePath = path.join(__dirname, '..', oldProfilePic);
         if (fs.existsSync(oldFilePath)) {
           fs.unlinkSync(oldFilePath);
           console.log('[updateProfilePic] Old profile picture deleted:', oldFilePath);
