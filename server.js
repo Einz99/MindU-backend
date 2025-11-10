@@ -149,12 +149,12 @@ app.use("/api/chatbotSettings", (req, res, next) => {
 
 // SINGLE WebSocket Connection Handler
 io.on("connection", (socket) => {
-
+  console.log(`🔌 Client connected: ${socket.id}`);
   // When a student joins the chat
   socket.on('join-chat', (student_id) => {
     const roomName = `student-${student_id}`;
     socket.join(roomName);
-    
+    console.log(`👤 Student ${student_id} joined chat room`);
     // Store the student's socket ID and room information
     activeSessions[student_id] = {
       socketId: socket.id,
@@ -168,6 +168,7 @@ io.on("connection", (socket) => {
   // When a staff member (agent) joins - mark them as an agent
   socket.on('join-agent', () => {
     socket.isAgent = true; // Mark this socket as an agent
+    console.log(`👨‍💼 Agent ${socket.id} joined`);
   });
 
   // When agent joins a specific student room
@@ -303,7 +304,7 @@ io.on("connection", (socket) => {
 
   // Handle disconnections and clean up the session
   socket.on("disconnect", () => {
-
+    console.log(`❌ Client disconnected: ${socket.id}`);
     // Clean up the session and remove from active sessions
     for (const [student_id, session] of Object.entries(activeSessions)) {
       if (session.socketId === socket.id || session.staffSockets.includes(socket.id)) {
@@ -354,29 +355,42 @@ app.post('/toggle-pet-sleep', async (req, res) => {
 cron.schedule('*/10 * * * *', async () => {
   const currentTime = new Date();
   const minutes = currentTime.getMinutes();
+  
   if (minutes % 10 === 0) {
+    const timestamp = currentTime.toISOString();
+    
     try {
-      // First query: Decrement sleep for pets not in sleepingPets
-      const sleepingPetIds = Object.keys(sleepingPets);  // Get all pet IDs from sleepingPets
-      const sleepingPetIdsList = sleepingPetIds.length > 0 ? sleepingPetIds.join(', ') : 'NULL'; // Use NULL if no sleepingPets
+      const sleepingPetIds = Object.keys(sleepingPets);
+      let totalUpdated = 0;
 
-      // Second query: Add sleep for pets in sleepingPets
       if (sleepingPetIds.length > 0) {
-        await db.query(`
+        const [result1] = await db.query(`
           UPDATE pets
-          SET sleep = GREATEST(sleep + 17, 0)
+          SET sleep = LEAST(sleep + 17, 100)
           WHERE id IN (${sleepingPetIds.join(', ')})`);
+        
+        totalUpdated += result1.affectedRows;
+
+        const [result2] = await db.query(`
+          UPDATE pets
+          SET sleep = GREATEST(sleep - 5, 0)
+          WHERE id NOT IN (${sleepingPetIds.join(', ')})`);
+        
+        totalUpdated += result2.affectedRows;
+      } else {
+        const [result] = await db.query(`
+          UPDATE pets
+          SET sleep = GREATEST(sleep - 5, 0)
+          WHERE student_id IS NOT NULL`);
+        
+        totalUpdated = result.affectedRows;
       }
 
-      await db.query(`
-        UPDATE pets
-        SET sleep = GREATEST(sleep - 5, 0)
-        WHERE id NOT IN (${sleepingPetIdsList})`);
-
-      
-
+      if (totalUpdated > 0) {
+        console.log(`😴 [${timestamp}] Updated sleep for ${totalUpdated} pet(s)`);
+      }
     } catch (error) {
-      console.error("Error updating sleep times:", error);
+      console.error(`❌ [${timestamp}] Pet sleep cron error:`, error.message);
     }
   }
 });

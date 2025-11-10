@@ -11,8 +11,15 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 // Helper function to send welcome email
 async function sendWelcomeEmail(staff) {
   try {
+    console.log('[sendWelcomeEmail] Sending welcome email', {
+      timestamp: new Date().toISOString(),
+      email: staff.email,
+      name: staff.name,
+      position: staff.position
+    });
+
     await resend.emails.send({
-      from: 'MindU <onboarding@resend.dev>', // Use your verified domain later
+      from: 'MindU <onboarding@resend.dev>',
       to: staff.email,
       subject: 'Welcome to MindU',
       html: `
@@ -24,16 +31,30 @@ async function sendWelcomeEmail(staff) {
         <p><em>Note: This is an automated message, please do not reply.</em></p>
       `,
     });
-    console.log(`Welcome email sent to ${staff.email}`);
+    
+    console.log('[sendWelcomeEmail] Welcome email sent successfully', {
+      timestamp: new Date().toISOString(),
+      email: staff.email
+    });
   } catch (error) {
-    console.error(`Failed to send welcome email to ${staff.email}:`, error);
-    // Don't throw - we don't want email failure to break staff creation
+    console.error('[sendWelcomeEmail] Failed to send welcome email', {
+      timestamp: new Date().toISOString(),
+      email: staff.email,
+      error: error.message,
+      stack: error.stack
+    });
   }
 }
 
 // Helper function to send reset code email
 async function sendResetCodeEmail(email, code) {
   try {
+    console.log('[sendResetCodeEmail] Sending reset code', {
+      timestamp: new Date().toISOString(),
+      email,
+      codeLength: code.length
+    });
+
     await resend.emails.send({
       from: 'MindU <onboarding@resend.dev>',
       to: email,
@@ -46,53 +67,150 @@ async function sendResetCodeEmail(email, code) {
         <p><em>Note: This is an automated message, please do not reply.</em></p>
       `,
     });
-    console.log(`Reset code email sent to ${email}`);
+    
+    console.log('[sendResetCodeEmail] Reset code sent successfully', {
+      timestamp: new Date().toISOString(),
+      email
+    });
   } catch (error) {
-    console.error(`Failed to send reset code to ${email}:`, error);
-    throw error; // Throw here because reset flow requires email
+    console.error('[sendResetCodeEmail] Failed to send reset code', {
+      timestamp: new Date().toISOString(),
+      email,
+      error: error.message,
+      stack: error.stack
+    });
+    throw error;
   }
 }
 
 exports.getAllStaffs = async (req, res) => {
+  const startTime = Date.now();
   try {
+    console.log('[getAllStaffs] Request started', {
+      timestamp: new Date().toISOString(),
+      ip: req.ip
+    });
+
     const staffs = await staffService.getAllStaffs();
+    
+    console.log('[getAllStaffs] Request successful', {
+      timestamp: new Date().toISOString(),
+      staffCount: staffs.length,
+      positions: staffs.reduce((acc, s) => {
+        acc[s.position] = (acc[s.position] || 0) + 1;
+        return acc;
+      }, {}),
+      duration: `${Date.now() - startTime}ms`
+    });
+
     return res.status(200).json(staffs);
   } catch (error) {
-    console.error("Error fetching staffs:", error);
+    console.error('[getAllStaffs] Request failed', {
+      timestamp: new Date().toISOString(),
+      error: error.message,
+      stack: error.stack,
+      duration: `${Date.now() - startTime}ms`
+    });
+    
     return res.status(500).json({ message: "Server error", error: error.message });
   }
 };
 
 exports.getStaffById = async (req, res) => {
+  const startTime = Date.now();
   try {
     const { id } = req.params;
+    
+    console.log('[getStaffById] Request started', {
+      timestamp: new Date().toISOString(),
+      staff_id: id,
+      ip: req.ip
+    });
+
     const staff = await staffService.getStaffById(id);
+    
     if (!staff) {
+      console.warn('[getStaffById] Staff not found', {
+        timestamp: new Date().toISOString(),
+        staff_id: id,
+        duration: `${Date.now() - startTime}ms`
+      });
+      
       return res.status(404).json({ message: "Staff not found" });
     }
+    
+    console.log('[getStaffById] Request successful', {
+      timestamp: new Date().toISOString(),
+      staff_id: id,
+      name: staff.name,
+      position: staff.position,
+      email: staff.email,
+      duration: `${Date.now() - startTime}ms`
+    });
+
     return res.status(200).json(staff);
   } catch (error) {
-    console.error("Error fetching staff:", error);
+    console.error('[getStaffById] Request failed', {
+      timestamp: new Date().toISOString(),
+      staff_id: req.params.id,
+      error: error.message,
+      stack: error.stack,
+      duration: `${Date.now() - startTime}ms`
+    });
+    
     return res.status(500).json({ message: "Server error", error: error.message });
   }
 };
 
 exports.createStaff = async (req, res) => {
+  const startTime = Date.now();
   try {
+    const { name, email, position, section, adding_name, adding_position } = req.body;
+    
+    console.log('[createStaff] Request started', {
+      timestamp: new Date().toISOString(),
+      name,
+      email,
+      position,
+      section,
+      adding_name,
+      adding_position,
+      ip: req.ip
+    });
+
     const newStaff = await staffService.createStaff(req.body);
     
     // Insert activity log message
-    const { adding_name, adding_position } = req.body;
     let logMessage = `${adding_position}: ${adding_name} added a new ${newStaff.position}`;
     if (newStaff.position === "Adviser" && newStaff.section) {
       logMessage += ` of section ${newStaff.section}`;
     }
     logMessage += ` named ${newStaff.name}`;
     await db.query("INSERT INTO ActivityLog (message) VALUES (?)", [logMessage]);
+    
+    console.log('[createStaff] Activity logged', {
+      timestamp: new Date().toISOString(),
+      activityMessage: logMessage
+    });
 
-    // Send welcome email asynchronously (don't block response)
+    // Send welcome email asynchronously
     sendWelcomeEmail(newStaff).catch(err => {
-      console.error('Email sending failed, but staff created:', err);
+      console.error('[createStaff] Email sending failed after staff creation', {
+        timestamp: new Date().toISOString(),
+        staff_id: newStaff.id,
+        email: newStaff.email,
+        error: err.message
+      });
+    });
+
+    console.log('[createStaff] Request successful', {
+      timestamp: new Date().toISOString(),
+      staff_id: newStaff.id,
+      name: newStaff.name,
+      position: newStaff.position,
+      email: newStaff.email,
+      section: newStaff.section,
+      duration: `${Date.now() - startTime}ms`
     });
 
     return res.status(201).json({
@@ -100,20 +218,46 @@ exports.createStaff = async (req, res) => {
       staff: newStaff,
     });
   } catch (error) {
-    console.error("Error creating staff:", error);
+    console.error('[createStaff] Request failed', {
+      timestamp: new Date().toISOString(),
+      name: req.body.name,
+      email: req.body.email,
+      position: req.body.position,
+      error: error.message,
+      stack: error.stack,
+      duration: `${Date.now() - startTime}ms`
+    });
+    
     return res.status(500).json({ message: "Server error", error: error.message });
   }
 };
 
 exports.updateStaff = async (req, res) => {
+  const startTime = Date.now();
   try {
     const { id } = req.params;
+    const { name, email, position, section, adding_name, adding_position } = req.body;
+    
+    console.log('[updateStaff] Request started', {
+      timestamp: new Date().toISOString(),
+      staff_id: id,
+      updates: { name, email, position, section },
+      updating_by: { adding_name, adding_position },
+      ip: req.ip
+    });
+
     const updated = await staffService.updateStaff(id, req.body);
+    
     if (!updated) {
+      console.warn('[updateStaff] Staff not found', {
+        timestamp: new Date().toISOString(),
+        staff_id: id,
+        duration: `${Date.now() - startTime}ms`
+      });
+      
       return res.status(404).json({ message: "Staff not found" });
     }
 
-    const { adding_name, adding_position } = req.body;
     const updatedStaff = await staffService.getStaffById(id);
     let logMessage = `${adding_position}: ${adding_name} updated a ${updatedStaff.position}`;
     if (updatedStaff.position === "Adviser" && updatedStaff.section) {
@@ -121,22 +265,56 @@ exports.updateStaff = async (req, res) => {
     }
     logMessage += ` named ${updatedStaff.name}`;
     await db.query("INSERT INTO ActivityLog (message) VALUES (?)", [logMessage]);
+    
+    console.log('[updateStaff] Activity logged', {
+      timestamp: new Date().toISOString(),
+      activityMessage: logMessage
+    });
+
+    console.log('[updateStaff] Request successful', {
+      timestamp: new Date().toISOString(),
+      staff_id: id,
+      updated_fields: Object.keys(req.body).filter(k => !k.startsWith('adding_')),
+      duration: `${Date.now() - startTime}ms`
+    });
 
     return res.status(200).json({ message: "Staff updated successfully" });
   } catch (error) {
-    console.error("Error updating staff:", error);
+    console.error('[updateStaff] Request failed', {
+      timestamp: new Date().toISOString(),
+      staff_id: req.params.id,
+      error: error.message,
+      stack: error.stack,
+      duration: `${Date.now() - startTime}ms`
+    });
+    
     return res.status(500).json({ message: "Server error", error: error.message });
   }
 };
 
 exports.deleteStaff = async (req, res) => {
+  const startTime = Date.now();
   try {
     const { id } = req.params;
     const staffName = req.query.staffName || "Unknown";
     const staffPosition = req.query.staffPosition || "Unknown";
     
+    console.log('[deleteStaff] Request started', {
+      timestamp: new Date().toISOString(),
+      staff_id: id,
+      deleting_by: { staffName, staffPosition },
+      ip: req.ip
+    });
+    
     const [staffRows] = await db.query('SELECT name, position FROM staffs WHERE id = ?', [id]);
+    
     if (staffRows.length === 0) {
+      console.warn('[deleteStaff] Staff not found', {
+        timestamp: new Date().toISOString(),
+        staff_id: id,
+        duration: `${Date.now() - startTime}ms`
+      });
+      
       return res.status(404).json({ message: "Staff not found" });
     }
     
@@ -144,110 +322,298 @@ exports.deleteStaff = async (req, res) => {
     const [deleteResult] = await db.query('DELETE FROM staffs WHERE id = ?', [id]);
     
     if (deleteResult.affectedRows === 0) {
+      console.warn('[deleteStaff] Delete operation failed', {
+        timestamp: new Date().toISOString(),
+        staff_id: id,
+        duration: `${Date.now() - startTime}ms`
+      });
+      
       return res.status(404).json({ message: "Staff not found" });
     }
 
     const message = `${staffPosition}: ${staffName} removed a staff with position ${staffToDelete.position} named ${staffToDelete.name}.`;
     await db.query("INSERT INTO ActivityLog (message) VALUES (?)", [message]);
+    
+    console.log('[deleteStaff] Activity logged', {
+      timestamp: new Date().toISOString(),
+      activityMessage: message
+    });
+
+    console.log('[deleteStaff] Request successful', {
+      timestamp: new Date().toISOString(),
+      staff_id: id,
+      deleted_name: staffToDelete.name,
+      deleted_position: staffToDelete.position,
+      duration: `${Date.now() - startTime}ms`
+    });
 
     return res.status(200).json({ message: "Staff deleted successfully" });
   } catch (error) {
-    console.error("Error deleting staff:", error);
+    console.error('[deleteStaff] Request failed', {
+      timestamp: new Date().toISOString(),
+      staff_id: req.params.id,
+      error: error.message,
+      stack: error.stack,
+      duration: `${Date.now() - startTime}ms`
+    });
+    
     return res.status(500).json({ message: "Server error", error: error.message });
   }
 };
 
 exports.updateStaffEmail = async (req, res) => {
+  const startTime = Date.now();
   try {
     const { id } = req.params;
     const { email } = req.body;
+    
+    console.log('[updateStaffEmail] Request started', {
+      timestamp: new Date().toISOString(),
+      staff_id: id,
+      new_email: email,
+      ip: req.ip
+    });
+
     const updated = await staffService.updateStaffEmail(id, email);
+    
     if (!updated) {
+      console.warn('[updateStaffEmail] Staff not found', {
+        timestamp: new Date().toISOString(),
+        staff_id: id,
+        duration: `${Date.now() - startTime}ms`
+      });
+      
       return res.status(404).json({ message: "Staff not found" });
     }
+    
+    console.log('[updateStaffEmail] Request successful', {
+      timestamp: new Date().toISOString(),
+      staff_id: id,
+      new_email: email,
+      duration: `${Date.now() - startTime}ms`
+    });
+
     return res.status(200).json({ message: "Staff email updated successfully" });
   } catch (error) {
-    console.error("Error updating staff email:", error);
+    console.error('[updateStaffEmail] Request failed', {
+      timestamp: new Date().toISOString(),
+      staff_id: req.params.id,
+      new_email: req.body.email,
+      error: error.message,
+      stack: error.stack,
+      duration: `${Date.now() - startTime}ms`
+    });
+    
     return res.status(500).json({ message: "Server error", error: error.message });
   }
 };
 
 exports.updateStaffPassword = async (req, res) => {
+  const startTime = Date.now();
   try {
     const { id } = req.params;
     const { currentPassword, newPassword } = req.body;
+    
+    console.log('[updateStaffPassword] Request started', {
+      timestamp: new Date().toISOString(),
+      staff_id: id,
+      ip: req.ip
+    });
+
     const staff = await staffService.getStaffById(id);
     
     if (!staff) {
+      console.warn('[updateStaffPassword] Staff not found', {
+        timestamp: new Date().toISOString(),
+        staff_id: id,
+        duration: `${Date.now() - startTime}ms`
+      });
+      
       return res.status(404).json({ message: "Staff not found" });
     }
 
     const passwordMatch = bcrypt.compareSync(currentPassword, staff.password);
+    
     if (!passwordMatch) {
+      console.warn('[updateStaffPassword] Incorrect current password', {
+        timestamp: new Date().toISOString(),
+        staff_id: id,
+        email: staff.email,
+        duration: `${Date.now() - startTime}ms`
+      });
+      
       return res.status(400).json({ message: "Current password is incorrect" });
     }
 
     await staffService.updateStaffPassword(id, newPassword);
+    
+    console.log('[updateStaffPassword] Request successful', {
+      timestamp: new Date().toISOString(),
+      staff_id: id,
+      email: staff.email,
+      duration: `${Date.now() - startTime}ms`
+    });
+
     return res.status(200).json({ message: "Password updated successfully" });
   } catch (error) {
-    console.error("Error updating password:", error);
+    console.error('[updateStaffPassword] Request failed', {
+      timestamp: new Date().toISOString(),
+      staff_id: req.params.id,
+      error: error.message,
+      stack: error.stack,
+      duration: `${Date.now() - startTime}ms`
+    });
+    
     return res.status(500).json({ message: "Server error", error: error.message });
   }
 };
 
 exports.updateStaffPicture = async (req, res) => {
+  const startTime = Date.now();
   try {
     const { id } = req.params;
     const picture = req.file ? req.file.filename : null;
+    
+    console.log('[updateStaffPicture] Request started', {
+      timestamp: new Date().toISOString(),
+      staff_id: id,
+      picture: picture,
+      hasFile: !!req.file,
+      ip: req.ip
+    });
+
     const updated = await staffService.updateStaffPicture(id, picture);
     
     if (!updated) {
+      console.warn('[updateStaffPicture] Staff not found', {
+        timestamp: new Date().toISOString(),
+        staff_id: id,
+        duration: `${Date.now() - startTime}ms`
+      });
+      
       return res.status(404).json({ message: "Staff not found" });
     }
+
+    console.log('[updateStaffPicture] Request successful', {
+      timestamp: new Date().toISOString(),
+      staff_id: id,
+      picture: picture,
+      duration: `${Date.now() - startTime}ms`
+    });
 
     return res.status(200).json({
       message: "Staff picture updated successfully",
       data: { picturePath: picture },
     });
   } catch (error) {
-    console.error("Error updating staff picture:", error);
+    console.error('[updateStaffPicture] Request failed', {
+      timestamp: new Date().toISOString(),
+      staff_id: req.params.id,
+      error: error.message,
+      stack: error.stack,
+      duration: `${Date.now() - startTime}ms`
+    });
+    
     return res.status(500).json({ message: "Server error", error: error.message });
   }
 };
 
 exports.loginStaff = async (req, res) => {
+  const startTime = Date.now();
   const { email, password } = req.body;
   
+  console.log('[loginStaff] Login attempt started', {
+    timestamp: new Date().toISOString(),
+    email,
+    ip: req.ip
+  });
+
   if (!email || !password) {
+    console.warn('[loginStaff] Validation failed - missing credentials', {
+      timestamp: new Date().toISOString(),
+      hasEmail: !!email,
+      hasPassword: !!password,
+      ip: req.ip
+    });
+    
     return res.status(400).json({ message: "Email and password are required" });
   }
 
   try {
     const staff = await staffService.getStaffByEmail(email);
+    
     if (!staff) {
+      console.warn('[loginStaff] Login failed - user not found', {
+        timestamp: new Date().toISOString(),
+        email,
+        ip: req.ip,
+        duration: `${Date.now() - startTime}ms`
+      });
+      
       return res.status(401).json({ message: "Invalid email or password" });
     }
 
     const isMatch = await bcrypt.compare(password, staff.password);
+    
     if (!isMatch) {
+      console.warn('[loginStaff] Login failed - incorrect password', {
+        timestamp: new Date().toISOString(),
+        email,
+        staff_id: staff.id,
+        position: staff.position,
+        ip: req.ip,
+        duration: `${Date.now() - startTime}ms`
+      });
+      
       return res.status(401).json({ message: "Invalid email or password" });
     }
 
     const { password: _, ...staffWithoutPassword } = staff;
+    
+    console.log('[loginStaff] Login successful', {
+      timestamp: new Date().toISOString(),
+      staff_id: staff.id,
+      email: staff.email,
+      name: staff.name,
+      position: staff.position,
+      ip: req.ip,
+      duration: `${Date.now() - startTime}ms`
+    });
+
     return res.status(200).json({
       message: "Login successful",
       staff: staffWithoutPassword,
     });
   } catch (error) {
-    console.error("Error logging in staff:", error);
+    console.error('[loginStaff] Login failed - server error', {
+      timestamp: new Date().toISOString(),
+      email,
+      error: error.message,
+      stack: error.stack,
+      ip: req.ip,
+      duration: `${Date.now() - startTime}ms`
+    });
+    
     return res.status(500).json({ message: "Server error", error: error.message });
   }
 };
 
 exports.exchangeCode = async (req, res) => {
+  const startTime = Date.now();
   const { code } = req.body;
   
+  console.log('[exchangeCode] Token exchange started', {
+    timestamp: new Date().toISOString(),
+    hasCode: !!code,
+    ip: req.ip
+  });
+
   if (!code) {
+    console.warn('[exchangeCode] Validation failed - missing code', {
+      timestamp: new Date().toISOString(),
+      ip: req.ip
+    });
+    
     return res.status(400).json({ message: "Authorization code is required" });
   }
 
@@ -263,9 +629,23 @@ exports.exchangeCode = async (req, res) => {
     });
 
     const { id_token, access_token } = response.data;
+    
     if (!id_token) {
+      console.warn('[exchangeCode] No ID token returned', {
+        timestamp: new Date().toISOString(),
+        hasAccessToken: !!access_token,
+        duration: `${Date.now() - startTime}ms`
+      });
+      
       return res.status(400).json({ message: "No ID Token returned" });
     }
+
+    console.log('[exchangeCode] Token exchange successful', {
+      timestamp: new Date().toISOString(),
+      hasIdToken: !!id_token,
+      hasAccessToken: !!access_token,
+      duration: `${Date.now() - startTime}ms`
+    });
 
     return res.status(200).json({
       message: "Token exchange successful",
@@ -273,21 +653,49 @@ exports.exchangeCode = async (req, res) => {
       access_token,
     });
   } catch (err) {
-    console.error('Error during token exchange:', err.response?.data || err.message);
+    console.error('[exchangeCode] Token exchange failed', {
+      timestamp: new Date().toISOString(),
+      error: err.response?.data || err.message,
+      stack: err.stack,
+      duration: `${Date.now() - startTime}ms`
+    });
+    
     return res.status(500).json({ message: "Error during token exchange" });
   }
 };
 
 exports.checkUser = async (req, res) => {
+  const startTime = Date.now();
   const { email } = req.body;
   
+  console.log('[checkUser] User check started', {
+    timestamp: new Date().toISOString(),
+    email,
+    ip: req.ip
+  });
+
   if (!email) {
+    console.warn('[checkUser] Validation failed - missing email', {
+      timestamp: new Date().toISOString(),
+      ip: req.ip
+    });
+    
     return res.status(400).json({ message: "Email is required" });
   }
 
   try {
     const user = await staffService.checkUser(email);
+    
     if (user) {
+      console.log('[checkUser] User found', {
+        timestamp: new Date().toISOString(),
+        email,
+        user_id: user.id,
+        position: user.position,
+        name: user.name,
+        duration: `${Date.now() - startTime}ms`
+      });
+      
       return res.status(200).json({
         exists: true,
         id: user.id,
@@ -296,10 +704,23 @@ exports.checkUser = async (req, res) => {
         section: user.section,
       });
     } else {
+      console.log('[checkUser] User not found', {
+        timestamp: new Date().toISOString(),
+        email,
+        duration: `${Date.now() - startTime}ms`
+      });
+      
       return res.status(404).json({ message: "User does not exist" });
     }
   } catch (error) {
-    console.error("Error checking user:", error);
+    console.error('[checkUser] User check failed', {
+      timestamp: new Date().toISOString(),
+      email,
+      error: error.message,
+      stack: error.stack,
+      duration: `${Date.now() - startTime}ms`
+    });
+    
     return res.status(500).json({ message: "Server error", error: error.message });
   }
 };
@@ -307,74 +728,193 @@ exports.checkUser = async (req, res) => {
 const resetCodes = new Map();
 
 exports.forgotPassword = async (req, res) => {
+  const startTime = Date.now();
   const { email } = req.body;
   
+  console.log('[forgotPassword] Password reset requested', {
+    timestamp: new Date().toISOString(),
+    email,
+    ip: req.ip
+  });
+
   if (!email) {
+    console.warn('[forgotPassword] Validation failed - missing email', {
+      timestamp: new Date().toISOString(),
+      ip: req.ip
+    });
+    
     return res.status(400).json({ message: "Email is required" });
   }
 
   try {
     const user = await staffService.checkUser(email);
+    
     if (!user) {
+      console.warn('[forgotPassword] User not found', {
+        timestamp: new Date().toISOString(),
+        email,
+        duration: `${Date.now() - startTime}ms`
+      });
+      
       return res.status(404).json({ message: "User does not exist" });
     }
 
     const code = Math.floor(100000 + Math.random() * 900000).toString();
     resetCodes.set(email, code);
 
+    console.log('[forgotPassword] Reset code generated', {
+      timestamp: new Date().toISOString(),
+      email,
+      user_id: user.id,
+      codeLength: code.length,
+      activeCodes: resetCodes.size
+    });
+
     await sendResetCodeEmail(email, code);
 
     setTimeout(() => {
       resetCodes.delete(email);
+      console.log('[forgotPassword] Reset code expired', {
+        timestamp: new Date().toISOString(),
+        email
+      });
     }, 10 * 60 * 1000);
+
+    console.log('[forgotPassword] Request successful', {
+      timestamp: new Date().toISOString(),
+      email,
+      user_id: user.id,
+      duration: `${Date.now() - startTime}ms`
+    });
 
     return res.status(200).json({ message: "Verification code sent to email" });
   } catch (error) {
-    console.error("Error sending verification code:", error);
+    console.error('[forgotPassword] Request failed', {
+      timestamp: new Date().toISOString(),
+      email,
+      error: error.message,
+      stack: error.stack,
+      duration: `${Date.now() - startTime}ms`
+    });
+    
     return res.status(500).json({ message: "Server error", error: error.message });
   }
 };
 
 exports.verifyCode = async (req, res) => {
+  const startTime = Date.now();
   const { email, code } = req.body;
   const storedCode = resetCodes.get(email);
   
+  console.log('[verifyCode] Code verification attempted', {
+    timestamp: new Date().toISOString(),
+    email,
+    hasStoredCode: !!storedCode,
+    codeMatches: storedCode === code,
+    ip: req.ip
+  });
+  
   if (storedCode && storedCode === code) {
+    console.log('[verifyCode] Code verified successfully', {
+      timestamp: new Date().toISOString(),
+      email,
+      duration: `${Date.now() - startTime}ms`
+    });
+    
     res.json({ valid: true });
   } else {
+    console.warn('[verifyCode] Code verification failed', {
+      timestamp: new Date().toISOString(),
+      email,
+      hasStoredCode: !!storedCode,
+      reason: !storedCode ? 'code_not_found' : 'code_mismatch',
+      duration: `${Date.now() - startTime}ms`
+    });
+    
     res.status(400).json({ valid: false, message: "Invalid or expired code" });
   }
 };
 
 exports.resetPassword = async (req, res) => {
+  const startTime = Date.now();
   const { email, newPassword } = req.body;
   
+  console.log('[resetPassword] Password reset started', {
+    timestamp: new Date().toISOString(),
+    email,
+    ip: req.ip
+  });
+
   try {
     await staffService.updateForgotPassword(email, newPassword);
     resetCodes.delete(email);
+    
+    console.log('[resetPassword] Password reset successful', {
+      timestamp: new Date().toISOString(),
+      email,
+      remainingCodes: resetCodes.size,
+      duration: `${Date.now() - startTime}ms`
+    });
+
     return res.status(200).json({ message: "Password reset successfully" });
   } catch (error) {
-    console.error("Error resetting password:", error);
+    console.error('[resetPassword] Password reset failed', {
+      timestamp: new Date().toISOString(),
+      email,
+      error: error.message,
+      stack: error.stack,
+      duration: `${Date.now() - startTime}ms`
+    });
+    
     return res.status(500).json({ message: "Server error", error: error.message });
   }
 };
 
 exports.bulkInsertAdvisers = async (req, res) => {
+  const startTime = Date.now();
   try {
     const { staffs } = req.body;
     
+    console.log('[bulkInsertAdvisers] Bulk insert started', {
+      timestamp: new Date().toISOString(),
+      count: staffs?.length || 0,
+      ip: req.ip
+    });
+
     if (!Array.isArray(staffs) || staffs.length === 0) {
+      console.warn('[bulkInsertAdvisers] Validation failed - invalid data', {
+        timestamp: new Date().toISOString(),
+        isArray: Array.isArray(staffs),
+        count: staffs?.length || 0
+      });
+      
       return res.status(400).json({ message: "Invalid request. Provide an array of advisers." });
     }
 
     const result = await staffService.bulkInsertAdvisers(staffs);
+    
+    console.log('[bulkInsertAdvisers] Bulk insert completed', {
+      timestamp: new Date().toISOString(),
+      totalRequested: staffs.length,
+      insertedCount: result.insertedCount,
+      skippedCount: result.skippedCount,
+      successRate: `${((result.insertedCount / staffs.length) * 100).toFixed(2)}%`,
+      duration: `${Date.now() - startTime}ms`
+    });
     
     return res.status(200).json({
       message: `${result.insertedCount} advisers inserted successfully.`,
       skipped: result.skippedCount > 0 ? `${result.skippedCount} were skipped (already exist).` : "No duplicates found.",
     });
   } catch (error) {
-    console.error("Bulk insert advisers failed:", error);
+    console.error('[bulkInsertAdvisers] Bulk insert failed', {
+      timestamp: new Date().toISOString(),
+      count: req.body.staffs?.length || 0,
+      error: error.message,
+      stack: error.stack,
+      duration: `${Date.now() - startTime}ms`
+    });
+    
     return res.status(500).json({ message: "Server error", error: error.message });
   }
 };

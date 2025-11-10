@@ -10,28 +10,34 @@ const { Resend } = require('resend');
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 const broadcastUpdates = async (io, userId) => {
+  console.log('[broadcastUpdates] Broadcasting update for user:', userId);
   if (!io) {
-    console.log("⚠️ WebSocket (io) not available.");
+    console.log("[broadcastUpdates] ⚠️ WebSocket (io) not available.");
     return;
   }
 
   try {
     io.emit("updateStudent", userId);
+    console.log('[broadcastUpdates] Update emitted successfully');
   } catch (error) {
-    console.error("❌ Error broadcasting updates:", error);
+    console.error("[broadcastUpdates] ❌ Error broadcasting updates:", error);
   }
 };
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     const uploadPath = path.join(__dirname, "../resources/profile_pics");
+    console.log('[multer] Upload destination:', uploadPath);
     if (!fs.existsSync(uploadPath)) {
       fs.mkdirSync(uploadPath, { recursive: true });
+      console.log('[multer] Created upload directory');
     }
     cb(null, uploadPath);
   },
   filename: (req, file, cb) => {
-    cb(null, `profile_${Date.now()}${path.extname(file.originalname)}`);
+    const filename = `profile_${Date.now()}${path.extname(file.originalname)}`;
+    console.log('[multer] Generated filename:', filename);
+    cb(null, filename);
   },
 });
 
@@ -39,20 +45,26 @@ const upload = multer({ storage }).single("profilePic");
 
 exports.login = async (req, res) => {
   const { identifier, password } = req.body;
+  console.log('[login] Login attempt for:', identifier);
+  
   const sql = "SELECT * FROM students WHERE email = ?";
   try {
     const [results] = await db.query(sql, [identifier]);
     if (results.length === 0) {
+      console.log('[login] User not found:', identifier);
       return res.status(401).json({ message: "User not found" });
     }
 
     const user = results[0];
+    console.log('[login] User found:', user.id, user.email);
 
     // Compare password with bcrypt
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
+      console.log('[login] Incorrect password for user:', identifier);
       return res.status(401).json({ message: "Incorrect password" });
     }
+    console.log('[login] Password verified successfully');
 
     // Generate JWT token if credentials are valid
     const accessToken = jwt.sign(
@@ -67,24 +79,28 @@ exports.login = async (req, res) => {
       { expiresIn: process.env.REFRESH_TOKEN_EXPIRY }
     );
 
+    console.log('[login] Tokens generated successfully for user:', user.id);
     return res.json({ accessToken, refreshToken, user });
   } catch (error) {
-    console.error("Error during login:", error);
+    console.error("[login] Error during login:", error);
     return res.status(500).json({ error: "Database error" });
   }
 };
 
 exports.googleLogin = async (req, res) => {
   const { email } = req.body;
+  console.log('[googleLogin] Google login attempt for:', email);
 
   try {
     const [results] = await db.query("SELECT * FROM students WHERE email = ?", [email]);
 
     if (results.length === 0) {
+      console.log('[googleLogin] User not found:', email);
       return res.status(401).json({ message: "User not found" });
     }
 
     const user = results[0];
+    console.log('[googleLogin] User found:', user.id, user.email);
 
     // No password needed — Google verified email
     const accessToken = jwt.sign(
@@ -99,90 +115,122 @@ exports.googleLogin = async (req, res) => {
       { expiresIn: process.env.REFRESH_TOKEN_EXPIRY }
     );
 
+    console.log('[googleLogin] Tokens generated successfully for user:', user.id);
     return res.json({ accessToken, refreshToken, user });
   } catch (err) {
-    console.error("Error during Google login:", err);
+    console.error("[googleLogin] Error during Google login:", err);
     return res.status(500).json({ error: "Database error" });
   }
 };
 
 exports.getUser = async (req, res) => {
   const token = req.headers.authorization?.split(" ")[1];
-  if (!token) return res.status(401).json({ message: "No token provided" });
+  console.log('[getUser] Request received');
+  
+  if (!token) {
+    console.log('[getUser] No token provided');
+    return res.status(401).json({ message: "No token provided" });
+  }
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const userId = decoded.id;
+    console.log('[getUser] Token verified for user:', userId);
 
     const sql = "SELECT id, firstName, lastName, section, adviser, age, gender, profilePic, email, isAskingHelp FROM students WHERE id = ?";
     const [rows] = await db.query(sql, [userId]);
 
-    if (rows.length === 0) return res.status(404).json({ message: "User not found" });
+    if (rows.length === 0) {
+      console.log('[getUser] User not found in database:', userId);
+      return res.status(404).json({ message: "User not found" });
+    }
 
+    console.log('[getUser] User data retrieved successfully:', userId);
     return res.json({ user: rows[0]});
   } catch (error) {
     if (error.name === "TokenExpiredError") {
+      console.log('[getUser] Token expired');
       return res.status(401).json({ message: "Token expired, please refresh" });
     }
-    console.error("Error fetching user:", error);
+    console.error("[getUser] Error fetching user:", error);
     return res.status(500).json({ message: "Database error" });
   }
 };
 
 exports.updateProfile = async (req, res) => {
+  console.log('[updateProfile] Profile update request received');
+  
   upload(req, res, async (err) => {
     const io = req.io;
-    if (err) return res.status(500).json({ message: "File upload error" });
+    if (err) {
+      console.error('[updateProfile] File upload error:', err);
+      return res.status(500).json({ message: "File upload error" });
+    }
 
     const token = req.headers.authorization?.split(" ")[1];
-    if (!token) return res.status(401).json({ message: "No token provided" });
+    if (!token) {
+      console.log('[updateProfile] No token provided');
+      return res.status(401).json({ message: "No token provided" });
+    }
 
     try {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
       const userId = decoded.id;
       const { age, gender } = req.body;
+      console.log('[updateProfile] Updating profile for user:', userId, { age, gender });
       
       let profilePicPath = null;
       if (req.file) {
         profilePicPath = `/resources/profile_pics/${req.file.filename}`;
+        console.log('[updateProfile] New profile picture uploaded:', profilePicPath);
       }
 
       const sql = "UPDATE students SET age = ?, gender = ?, profilePic = ? WHERE id = ?";
       await db.query(sql, [age, gender, profilePicPath, userId]);
+      console.log('[updateProfile] Profile updated successfully');
 
       await broadcastUpdates(io, userId);
       return res.json({ success: true, message: "Profile updated successfully", profilePicPath });
     } catch (error) {
-      console.error("Error updating profile:", error);
+      console.error("[updateProfile] Error updating profile:", error);
       return res.status(500).json({ message: "Database error" });
     }
   });
 };
 
 exports.updatePassword = async (req, res) => {
+  console.log('[updatePassword] Password update request received');
+  
   const token = req.headers.authorization?.split(" ")[1];
-  if (!token) return res.status(401).json({ message: "No token provided" });
+  if (!token) {
+    console.log('[updatePassword] No token provided');
+    return res.status(401).json({ message: "No token provided" });
+  }
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const userId = decoded.id;
     const { password, firstLogin } = req.body;
+    console.log('[updatePassword] Updating password for user:', userId, { firstLogin });
 
     if (!password) {
+      console.log('[updatePassword] Password not provided');
       return res.status(400).json({ message: "Password is required" });
     }
 
     // Hash the password with bcrypt
     const hashedPassword = await bcrypt.hash(password, 10);
     const passwordLength = password.length;
+    console.log('[updatePassword] Password hashed successfully, length:', passwordLength);
 
     const sql = "UPDATE students SET password = ?, passwordLength = ?, firstLogin = ? WHERE id = ?";
     const [result] = await db.query(sql, [hashedPassword, passwordLength, firstLogin, userId]);
+    console.log('[updatePassword] Password updated successfully');
     
     await broadcastUpdates(req.io, userId);
     return res.json({ success: true, message: "Password updated successfully" });
   } catch (error) {
-    console.error("Error updating password:", error);
+    console.error("[updatePassword] Error updating password:", error);
     return res.status(500).json({ message: "Database error" });
   }
 };
@@ -191,6 +239,7 @@ const resetCodes = new Map();
 
 // Helper function to send reset code email
 async function sendResetCodeEmail(email, code) {
+  console.log('[sendResetCodeEmail] Sending reset code to:', email);
   try {
     await resend.emails.send({
       from: 'MindU <onboarding@resend.dev>',
@@ -204,16 +253,19 @@ async function sendResetCodeEmail(email, code) {
         <p><em>Note: This is an automated message, please do not reply.</em></p>
       `,
     });
-    console.log(`Reset code email sent to ${email}`);
+    console.log(`[sendResetCodeEmail] Reset code email sent successfully to ${email}`);
   } catch (error) {
-    console.error(`Failed to send reset code to ${email}:`, error);
+    console.error(`[sendResetCodeEmail] Failed to send reset code to ${email}:`, error);
     throw error;
   }
 }
 
 exports.sendCode = async (req, res) => {
   const { email } = req.body;
+  console.log('[sendCode] Send code request for:', email);
+  
   if (!email) {
+    console.log('[sendCode] Email not provided');
     return res.status(400).json({ message: "Email is required" });
   }
 
@@ -222,46 +274,57 @@ exports.sendCode = async (req, res) => {
   try {
     const [user] = await db.query(query, [email]);
     if (!user || user.length === 0) { 
+      console.log('[sendCode] User does not exist:', email);
       return res.status(404).json({ message: "User does not exist" });
     }
+    console.log('[sendCode] User found:', email);
 
     const code = Math.floor(1000 + Math.random() * 9000).toString(); // 4-digit code
     resetCodes.set(email, code);
+    console.log('[sendCode] Reset code generated and stored');
 
     await sendResetCodeEmail(email, code);
     
     setTimeout(() => { 
       resetCodes.delete(email);
+      console.log('[sendCode] Reset code expired and deleted for:', email);
     }, 10 * 60 * 1000);
 
     return res.status(200).json({ message: "Verification code sent to email" });
   } catch (error) {
-    console.error("Error sending verification code:", error);
+    console.error("[sendCode] Error sending verification code:", error);
     return res.status(500).json({ message: "Server error", error: error.message });
   }
 };
 
 exports.verifyCode = async (req, res) => {
   const { email, code } = req.body;
+  console.log('[verifyCode] Verifying code for:', email);
+  
   const storedCode = resetCodes.get(email);
 
   if (storedCode && storedCode === code) {
+    console.log('[verifyCode] Code verified successfully');
     res.json({ valid: true });
   } else {
+    console.log('[verifyCode] Invalid or expired code');
     res.status(400).json({ valid: false, message: "Invalid or expired code" });
   }
 };
 
 exports.forgotPassword = async (req, res) => {
   const { email, newPassword } = req.body;
+  console.log('[forgotPassword] Password reset request for:', email);
 
   if (!newPassword || !email) {
+    console.log('[forgotPassword] Missing email or password');
     return res.status(400).json({ message: "Provide a new password and an email." });
   }
 
   // Hash the password with bcrypt
   const hashedPassword = await bcrypt.hash(newPassword, 10);
   const passwordLength = newPassword.length;
+  console.log('[forgotPassword] New password hashed, length:', passwordLength);
 
   const sql = "UPDATE students SET password = ?, passwordLength = ? WHERE email = ?";
   const params = [hashedPassword, passwordLength, email];
@@ -269,28 +332,33 @@ exports.forgotPassword = async (req, res) => {
   try {
     const [results] = await db.query(sql, params);
     if (results.affectedRows === 0) {
+      console.log('[forgotPassword] User not found:', email);
       return res.status(404).json({ message: "User not found." });
     }
     
     // Clear the reset code after successful password reset
     resetCodes.delete(email);
+    console.log('[forgotPassword] Password reset successfully, code cleared');
     
     return res.status(200).json({ message: "Password reset successfully." });
   } catch (error) {
-    console.error("Error updating password:", error);
+    console.error("[forgotPassword] Error updating password:", error);
     return res.status(500).json({ message: "Database error." });
   }
 };
 
 exports.refreshToken = async (req, res) => {
   const { refreshToken } = req.body;
+  console.log('[refreshToken] Token refresh request received');
 
   if (!refreshToken) {
+    console.log('[refreshToken] No refresh token provided');
     return res.status(403).json({ message: "Refresh token required" });
   }
 
   try {
     const decoded = jwt.verify(refreshToken, process.env.REFRESH_SECRET);
+    console.log('[refreshToken] Refresh token verified for user:', decoded.id);
 
     const newAccessToken = jwt.sign(
       { id: decoded.id, firstLogin: decoded.firstLogin },
@@ -298,61 +366,86 @@ exports.refreshToken = async (req, res) => {
       { expiresIn: process.env.ACCESS_TOKEN_EXPIRY }
     );
 
+    console.log('[refreshToken] New access token generated');
     return res.json({ accessToken: newAccessToken });
   } catch (error) {
+    console.error('[refreshToken] Invalid refresh token:', error);
     return res.status(403).json({ message: "Invalid refresh token" });
   }
 };
 
 exports.updateEmail = async (req, res) => {
+  console.log('[updateEmail] Email update request received');
+  
   const token = req.headers.authorization?.split(" ")[1];
-  if (!token) return res.status(401).json({ message: "No token provided" });
+  if (!token) {
+    console.log('[updateEmail] No token provided');
+    return res.status(401).json({ message: "No token provided" });
+  }
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const userId = decoded.id;
     const { email } = req.body;
+    console.log('[updateEmail] Updating email for user:', userId, 'New email:', email);
 
     // Check if email is valid and not already in use
-    if (!email) return res.status(400).json({ message: "Email is required" });
+    if (!email) {
+      console.log('[updateEmail] Email not provided');
+      return res.status(400).json({ message: "Email is required" });
+    }
     
     // Check if email already exists for another user
     const [existingUser] = await db.query("SELECT id FROM students WHERE email = ? AND id != ?", [email, userId]);
     if (existingUser.length > 0) {
+      console.log('[updateEmail] Email already in use:', email);
       return res.status(400).json({ message: "Email already in use" });
     }
 
     const sql = "UPDATE students SET email = ? WHERE id = ?";
     const [result] = await db.query(sql, [email, userId]);
+    console.log('[updateEmail] Email updated successfully');
     
     await broadcastUpdates(req.io, userId);
     return res.json({ success: true, message: "Email updated successfully" });
   } catch (error) {
-    console.error("Error updating email:", error);
+    console.error("[updateEmail] Error updating email:", error);
     return res.status(500).json({ message: "Database error" });
   }
 };
 
 exports.updateProfilePic = async (req, res) => {
+  console.log('[updateProfilePic] Profile picture update request received');
+  
   upload(req, res, async (err) => {
     const io = req.io;
-    if (err) return res.status(500).json({ message: "File upload error" });
+    if (err) {
+      console.error('[updateProfilePic] File upload error:', err);
+      return res.status(500).json({ message: "File upload error" });
+    }
 
     const token = req.headers.authorization?.split(" ")[1];
-    if (!token) return res.status(401).json({ message: "No token provided" });
+    if (!token) {
+      console.log('[updateProfilePic] No token provided');
+      return res.status(401).json({ message: "No token provided" });
+    }
 
     try {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
       const userId = decoded.id;
+      console.log('[updateProfilePic] Updating profile picture for user:', userId);
       
       // If no file uploaded
       if (!req.file) {
+        console.log('[updateProfilePic] No file uploaded');
         return res.status(400).json({ message: "No file uploaded" });
       }
+      console.log('[updateProfilePic] File received:', req.file.filename);
       
       // Get current profile pic path to delete
       const [user] = await db.query("SELECT profilePic FROM students WHERE id = ?", [userId]);
       const oldProfilePic = user[0]?.profilePic;
+      console.log('[updateProfilePic] Old profile picture:', oldProfilePic);
       
       // Set new profile pic path
       const profilePicPath = `/resources/profile_pics/${req.file.filename}`;
@@ -360,12 +453,14 @@ exports.updateProfilePic = async (req, res) => {
       // Update in database
       const sql = "UPDATE students SET profilePic = ? WHERE id = ?";
       await db.query(sql, [profilePicPath, userId]);
+      console.log('[updateProfilePic] Database updated with new profile picture');
       
       // Delete old profile pic if exists and isn't default
       if (oldProfilePic && !oldProfilePic.includes('default')) {
         const oldFilePath = path.join(__dirname, '..', oldProfilePic);
         if (fs.existsSync(oldFilePath)) {
           fs.unlinkSync(oldFilePath);
+          console.log('[updateProfilePic] Old profile picture deleted:', oldFilePath);
         }
       }
 
@@ -376,7 +471,7 @@ exports.updateProfilePic = async (req, res) => {
         profilePicPath 
       });
     } catch (error) {
-      console.error("Error updating profile picture:", error);
+      console.error("[updateProfilePic] Error updating profile picture:", error);
       return res.status(500).json({ message: "Database error" });
     }
   });

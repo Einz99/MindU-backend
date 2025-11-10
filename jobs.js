@@ -1,9 +1,9 @@
 const cron = require('node-cron');
 const db = require('./db');
 
-// ⏱ Run every 15 minutes
 cron.schedule('*/15 * * * *', async () => {
-
+  const timestamp = new Date().toISOString();
+  
   try {
     const [result] = await db.query(`
       UPDATE backlogs
@@ -14,35 +14,39 @@ cron.schedule('*/15 * * * *', async () => {
         AND NOW() >= DATE_ADD(sched_date, INTERVAL 1 HOUR)
     `);
 
+    if (result.affectedRows > 0) {
+      console.log(`✅ [${timestamp}] Marked ${result.affectedRows} appointment(s) as missed`);
+    }
   } catch (error) {
-    console.error('❌ Error updating missed backlogs:', error.message);
+    console.error(`❌ [${timestamp}] Missed appointments cron error:`, error.message);
   }
 });
 
-// ⏱ Run every 10 minutes, but sync to the clock (e.g., 6:10, 6:20, 6:30, etc.)
 cron.schedule('*/10 * * * *', async () => {
-  // Get the current time
   const currentTime = new Date();
   const minutes = currentTime.getMinutes();
 
-  // Check if the current time is aligned with 10-minute intervals (like 6:10, 6:20, etc.)
   if (minutes % 10 === 0) {
+    const timestamp = currentTime.toISOString();
 
     try {
-      // Decrease hunger by 5 and hygiene by 3 for all pets
       const [result] = await db.query(`
         UPDATE pets
         SET
-          hunger = GREATEST(hunger - 5, 0),  -- Decrease hunger, but not below 0
-          hygiene = GREATEST(hygiene - 3, 0), -- Decrease hygiene, but not below 0
+          hunger = GREATEST(hunger - 5, 0),
+          hygiene = GREATEST(hygiene - 3, 0),
           playfulness = GREATEST(playfulness - 10, 0),
           sleep = GREATEST(sleep - 5, 0)
-        WHERE student_id IS NOT NULL  -- Ensure it's an actual pet (having student_id)
+        WHERE student_id IS NOT NULL
       `);
       
+      if (result.affectedRows > 0) {
+        console.log(`🐾 [${timestamp}] Updated stats for ${result.affectedRows} pet(s)`);
+      }
     } catch (error) {
-      console.error('❌ Error updating pet status:', error.message);
+      console.error(`❌ [${timestamp}] Pet stats cron error:`, error.message);
     }
   }
 });
 
+console.log('✅ Cron jobs initialized');

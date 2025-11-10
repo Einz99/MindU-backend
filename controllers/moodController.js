@@ -1,71 +1,126 @@
 const moodServices = require("../services/moodServices");
 
 exports.getMood = async (req, res) => {
+  const startTime = Date.now();
   try {
     const { student_id } = req.params;
-    const results = await moodServices.getMood(student_id); // ✅ keep entire array
+    
+    console.log('[getMood] Request started', {
+      timestamp: new Date().toISOString(),
+      student_id,
+      ip: req.ip,
+      userAgent: req.get('user-agent')
+    });
+    
+    const results = await moodServices.getMood(student_id);
+    
+    console.log('[getMood] Request successful', {
+      timestamp: new Date().toISOString(),
+      student_id,
+      recordCount: results.length,
+      duration: `${Date.now() - startTime}ms`
+    });
+    
     return res.status(200).json(results);
   } catch (error) {
-    console.log("Error getting mood:", error);
+    console.error('[getMood] Request failed', {
+      timestamp: new Date().toISOString(),
+      student_id: req.params.student_id,
+      error: error.message,
+      stack: error.stack,
+      duration: `${Date.now() - startTime}ms`
+    });
+    
     return res.status(500).json({ message: "Server error", error: error.message });
   }
 };
 
 exports.upsertMood = async (req, res) => {
+  const startTime = Date.now();
   try {
     const { student_id, mood } = req.body;
 
+    console.log('[upsertMood] Request started', {
+      timestamp: new Date().toISOString(),
+      student_id,
+      mood,
+      ip: req.ip
+    });
+
     if (!student_id || !mood) {
+      console.warn('[upsertMood] Validation failed - missing fields', {
+        timestamp: new Date().toISOString(),
+        student_id: !!student_id,
+        mood: !!mood
+      });
+      
       return res.status(400).json({ message: "Missing required fields: student_id and mood" });
     }
 
     const validMoods = ['Happy', 'Motivated', 'Calm', 'Anxious', 'Tired', 'Sad', 'Angry'];
     if (!validMoods.includes(mood)) {
+      console.warn('[upsertMood] Validation failed - invalid mood', {
+        timestamp: new Date().toISOString(),
+        student_id,
+        providedMood: mood,
+        validMoods
+      });
+      
       return res.status(400).json({ message: `Invalid mood. Valid options are: ${validMoods.join(', ')}` });
     }
 
     const now = new Date();
-    const today = now.toISOString().split('T')[0]; // Get today's date in 'YYYY-MM-DD' format
+    const today = now.toISOString().split('T')[0];
 
-    // Check if mood has already been updated for today
     const existing = await moodServices.getMoodByDate(student_id, today);
+
+    console.log('[upsertMood] Existing mood check', {
+      timestamp: new Date().toISOString(),
+      student_id,
+      today,
+      existingFound: !!existing,
+      operation: existing ? 'update' : 'create'
+    });
 
     let result;
     if (existing) {
-      // Mood is being updated (not created)
       await moodServices.updateMood({ 
         student_id, 
         mood, 
         emotion_dated: today 
       });
+      
       result = { message: "Mood updated for today" };
+      
+      console.log('[upsertMood] Mood updated', {
+        timestamp: new Date().toISOString(),
+        student_id,
+        mood,
+        date: today,
+        duration: `${Date.now() - startTime}ms`
+      });
       
       return res.status(200).json(result);
     } else {
-      // Create new mood
       await moodServices.createMood({ 
         id: student_id, 
         mood, 
         emotion_dated: today 
       });
 
-      // Add coins and streak on the first mood update of the day
       const lastLogin = existing ? existing.emotion_dated : null;
       const lastStreak = existing ? existing.streak : 0;
 
       let streak = lastStreak;
 
-      // If last mood was updated yesterday, reset streak, otherwise increment
       if (lastLogin !== today) {
         streak = 0;
       } else if (streak < 7) {
         streak++;
       }
 
-      // Cap streak to 7 if it exceeds that value.
       streak = Math.min(streak, 7);
 
-      // Calculate coins based on streak
       let coinsToAdd = 0;
       switch (streak) {
         case 0: coinsToAdd = 5; break;
@@ -79,7 +134,14 @@ exports.upsertMood = async (req, res) => {
         default: coinsToAdd = 5;
       }
 
-      // Update the pet's coins and streak in the pets table
+      console.log('[upsertMood] Streak calculation', {
+        timestamp: new Date().toISOString(),
+        student_id,
+        lastStreak,
+        newStreak: streak,
+        coinsToAdd
+      });
+
       await moodServices.updatePetCoinsAndStreak(student_id, coinsToAdd, streak);
 
       result = { 
@@ -87,11 +149,29 @@ exports.upsertMood = async (req, res) => {
         streak, 
         coinsAdded: coinsToAdd 
       };
+      
+      console.log('[upsertMood] Mood created with rewards', {
+        timestamp: new Date().toISOString(),
+        student_id,
+        mood,
+        date: today,
+        streak,
+        coinsAdded: coinsToAdd,
+        duration: `${Date.now() - startTime}ms`
+      });
     }
 
     return res.status(200).json(result);
   } catch (error) {
-    console.error("Error in upserting mood:", error);
+    console.error('[upsertMood] Request failed', {
+      timestamp: new Date().toISOString(),
+      student_id: req.body.student_id,
+      mood: req.body.mood,
+      error: error.message,
+      stack: error.stack,
+      duration: `${Date.now() - startTime}ms`
+    });
+    
     return res.status(500).json({ message: "Server error", error: error.message });
   }
 };
