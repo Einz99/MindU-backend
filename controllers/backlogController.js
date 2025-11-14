@@ -508,8 +508,9 @@ exports.getStaffRequestsByStaffId = async (req, res) => {
         b.sched_date,
         b.status,
         b.comment,
-        b.name
+        CONCAT(s.firstName, ' ', s.lastName) AS student_name
       FROM backlogs b
+      JOIN students s ON b.student_id = s.id
       WHERE b.staff_id = ?
         AND (b.status = 'Pending' OR b.status = 'Scheduled')
       ORDER BY 
