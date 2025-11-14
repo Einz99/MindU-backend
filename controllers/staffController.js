@@ -365,8 +365,8 @@ exports.updateStaffEmail = async (req, res) => {
   const startTime = Date.now();
   try {
     const { id } = req.params;
-    const { email } = req.body;
-    
+    const { email, currentPassword } = req.body;
+
     console.log('[updateStaffEmail] Request started', {
       timestamp: new Date().toISOString(),
       staff_id: id,
@@ -374,6 +374,34 @@ exports.updateStaffEmail = async (req, res) => {
       ip: req.ip
     });
 
+    // Retrieve staff data
+    const staff = await staffService.getStaffById(id);
+    
+    if (!staff) {
+      console.warn('[updateStaffEmail] Staff not found', {
+        timestamp: new Date().toISOString(),
+        staff_id: id,
+        duration: `${Date.now() - startTime}ms`
+      });
+      
+      return res.status(404).json({ message: "Staff not found" });
+    }
+
+    // Validate the current password
+    const passwordMatch = bcrypt.compareSync(currentPassword, staff.password);
+    
+    if (!passwordMatch) {
+      console.warn('[updateStaffEmail] Incorrect current password', {
+        timestamp: new Date().toISOString(),
+        staff_id: id,
+        email: staff.email,
+        duration: `${Date.now() - startTime}ms`
+      });
+      
+      return res.status(400).json({ message: "Current password is incorrect" });
+    }
+
+    // If password is correct, update the email
     const updated = await staffService.updateStaffEmail(id, email);
     
     if (!updated) {
