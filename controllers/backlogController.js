@@ -2,9 +2,12 @@
 const backlogService = require("../services/backlogService");
 const db = require("../db");
 const { format } = require("date-fns");
-const nodemailer = require('nodemailer');
+const { Resend } = require('resend');
 const fs = require("fs");
 const path = require("path");
+
+// Initialize Resend
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 exports.createBacklog = async (req, res) => {
   console.log('[createBacklog] Request received');
@@ -28,28 +31,30 @@ exports.createBacklog = async (req, res) => {
         data.name = `${student.firstName} ${student.lastName}`;
         console.log('[createBacklog] Student found:', data.name, student.email);
 
-        const transporter = nodemailer.createTransport({
-            service: 'gmail',
-            auth: {
-              user: process.env.EMAIL_USER,
-              pass: process.env.EMAIL_PASS,
-            },
+        // Send confirmation email using Resend
+        try {
+          await resend.emails.send({
+            from: 'MindU <onboarding@resend.dev>',
+            to: student.email,
+            subject: 'Appointment Request Received – MIND-U',
+            html: `
+              <p>Dear ${data.name},</p>
+              <p>Thank you for requesting an appointment through the MIND-U Student Wellness Management System.</p>
+              <br>
+              <p>Your appointment request will be reviewed by our team. Once it is approved and scheduled, you will receive a notification with the appointment details.</p>
+              <br>
+              <p><em>Note: This is an automated message — <strong>please do not reply</strong>.</em></p>
+              <br>
+              <p>Thank you for using MIND-U.</p>
+              <p>Best regards,</p>
+              <p><strong>The Mind-U Team</strong></p>
+            `,
           });
-      
-        await transporter.sendMail({
-          from: `"The MIND-U Team" <${process.env.EMAIL_USER}>`,
-          to: student.email,
-          subject: 'Appointment Request Received – MIND-U',
-          html: `<p>Dear ${data.name},</p>
-                 <p>Thank you for requesting an appointment through the MIND-U Student Wellness Management System.</p><br>
-                 <p>Your appointment request will be reviewed by our team. Once it is approved and scheduled, you will receive a notification with the appointment details.</p><br>
-                 <p>Note: This is an automated message —— <strong>please do not reply<strong>.</p><br>
-                 <p>Thank you for using MIND-U.<p>
-                 <p>Best regards,</p>
-                 <p><strong>The Mind-U Team<strong></p>
-                 `,
-        });
-        console.log('[createBacklog] Confirmation email sent to:', student.email);
+          console.log('[createBacklog] Confirmation email sent to:', student.email);
+        } catch (emailError) {
+          console.error('[createBacklog] Failed to send confirmation email:', emailError);
+          // Continue processing even if email fails
+        }
       } else {
         data.name = "Unknown Student";
         console.log('[createBacklog] Student not found, using Unknown Student');
@@ -193,31 +198,29 @@ exports.updateBacklog = async (req, res) => {
         const formattedTime = format(new Date(sched_date), "hh:mm a");
         console.log('[updateBacklog] Student found:', student.email, 'Scheduled for:', formattedDate, formattedTime);
       
-        const transporter = nodemailer.createTransport({
-          service: 'gmail',
-          auth: {
-            user: process.env.EMAIL_USER,
-            pass: process.env.EMAIL_PASS,
-          },
-        });
-      
-        await transporter.sendMail({
-          from: `"The MIND-U Team" <${process.env.EMAIL_USER}>`,
-          to: student.email,
-          subject: 'Appointment Scheduled – MIND-U Confirmation',
-          html: `
-            <p>Dear ${student.firstName} ${student.lastName},</p>
-            <p>We're pleased to inform you that your appointment through the <strong>MIND-U Student Wellness Management System</strong> has been <strong>successfully scheduled</strong>.</p>
-            <p><strong>Appointment Details:</strong><br>
-            Date: ${formattedDate}<br>
-            Time: ${formattedTime}</p>
-            <p>Please be reminded to arrive <strong>on time</strong> for your scheduled appointment. If you are unable to attend, kindly inform the Guidance Office in advance.</p>
-            <p><strong>This is an automated message — do not reply to this email.</strong></p>
-            <p>Thank you for taking a step toward your well-being.</p>
-            <p>Best regards,<br><strong>The MIND-U Team</strong></p>
-          `,
-        });
-        console.log('[updateBacklog] Scheduled email sent successfully');
+        // Send scheduled appointment email using Resend
+        try {
+          await resend.emails.send({
+            from: 'MindU <onboarding@resend.dev>',
+            to: student.email,
+            subject: 'Appointment Scheduled – MIND-U Confirmation',
+            html: `
+              <p>Dear ${student.firstName} ${student.lastName},</p>
+              <p>We're pleased to inform you that your appointment through the <strong>MIND-U Student Wellness Management System</strong> has been <strong>successfully scheduled</strong>.</p>
+              <p><strong>Appointment Details:</strong><br>
+              Date: ${formattedDate}<br>
+              Time: ${formattedTime}</p>
+              <p>Please be reminded to arrive <strong>on time</strong> for your scheduled appointment. If you are unable to attend, kindly inform the Guidance Office in advance.</p>
+              <p><em>Note: This is an automated message — <strong>please do not reply</strong>.</em></p>
+              <p>Thank you for taking a step toward your well-being.</p>
+              <p>Best regards,<br><strong>The MIND-U Team</strong></p>
+            `,
+          });
+          console.log('[updateBacklog] Scheduled email sent successfully');
+        } catch (emailError) {
+          console.error('[updateBacklog] Failed to send scheduled email:', emailError);
+          // Continue processing even if email fails
+        }
       } else {
         console.log('[updateBacklog] Student not found for email notification');
       }

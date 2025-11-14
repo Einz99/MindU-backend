@@ -1,7 +1,10 @@
 const db = require('../db');
 const crypto = require("crypto");
-const nodemailer = require('nodemailer');
+const { Resend } = require('resend');
 // const bcrypt = require("bcrypt");
+
+// Initialize Resend
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 exports.getAllStudents = async () => {
   const [rows] = await db.query("SELECT * FROM students");
@@ -194,30 +197,28 @@ exports.bulkInsertStudents = async (students) => {
   ]);
   const [result] = await db.query(sql, [values]);
 
-  // 6. Send email to each new student
-  const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS,
-    },
-  });
-
+  // 6. Send email to each new student using Resend
   for (const student of newStudents) {
-    await transporter.sendMail({
-      from: `"MindU Support" <${process.env.EMAIL_USER}>`,
-      to: student.email,
-      subject: 'Welcome to MindU',
-      html: `
-        <p>Welcome <strong>${student.firstName} ${student.lastName}</strong>,</p>
-        <p>Your account has been <strong>created successfully</strong>.</p>
-        <p><strong>Temporary Password:</strong> <code>${student.randomPassword}</code></p>
-        <p>Please change your password as soon as possible after logging in.</p>
-        <hr/>
-        <p><em>This is an automated message. Please do not reply.</em></p>
-        <p>— The MindU Team</p>
-      `,
-    });
+    try {
+      await resend.emails.send({
+        from: 'MindU <onboarding@resend.dev>',
+        to: student.email,
+        subject: 'Welcome to MindU',
+        html: `
+          <p>Welcome <strong>${student.firstName} ${student.lastName}</strong>,</p>
+          <p>Your account has been <strong>created successfully</strong>.</p>
+          <p><strong>Temporary Password:</strong> <code>${student.randomPassword}</code></p>
+          <p>Please change your password as soon as possible after logging in.</p>
+          <hr/>
+          <p><em>This is an automated message. Please do not reply.</em></p>
+          <p>— The MindU Team</p>
+        `,
+      });
+      console.log(`[bulkInsertStudents] Welcome email sent to: ${student.email}`);
+    } catch (emailError) {
+      console.error(`[bulkInsertStudents] Failed to send email to ${student.email}:`, emailError);
+      // Continue processing even if email fails
+    }
   }
 
   return {
