@@ -25,7 +25,7 @@ const client = new dialogflow.SessionsClient({
 
 // Configuration
 const CONFIG = {
-  CONFIDENCE_THRESHOLD: 0, // Adjust based on your needs (0.3-0.5 recommended)
+  CONFIDENCE_THRESHOLD: 0.2, // Lowered to catch more intents (was 0.4)
   TIMEOUT_MS: 10000,
   FALLBACK_RESPONSE: 'I\'m not quite sure how to help with that. Could you please rephrase or ask something else?'
 };
@@ -38,16 +38,17 @@ const CONFIG = {
  */
 async function getDialogflowResponse(userMessage, userId) {
   try {
-    // FIXED: Use consistent session ID per user (no Date.now())
-    // This maintains conversation context across messages
+    // Use consistent session ID per user
     const sessionId = `session-${userId}`;
     
-    // Create the session path using the project_id from credentials
+    // Create the session path - CRITICAL: must match exactly
     const sessionPath = client.projectAgentSessionPath(credentials.project_id, sessionId);
     
     console.log('📤 Sending to Dialogflow:', {
       message: userMessage,
       sessionId,
+      projectId: credentials.project_id,
+      sessionPath,
       timestamp: new Date().toISOString()
     });
 
@@ -56,10 +57,13 @@ async function getDialogflowResponse(userMessage, userId) {
       queryInput: {
         text: {
           text: userMessage,
-          languageCode: 'en-US',
+          languageCode: 'en', // Match console: just 'en'
         },
       },
     };
+    
+    // Debug: Log the full request structure
+    console.log('📋 Request structure:', JSON.stringify(request, null, 2));
 
     // Add timeout to the Dialogflow request
     const timeoutPromise = new Promise((_, reject) => {
@@ -71,15 +75,48 @@ async function getDialogflowResponse(userMessage, userId) {
     // Race between the actual request and timeout
     const responses = await Promise.race([dialogflowPromise, timeoutPromise]);
     
-    const result = responses[0].queryResult;
+    // IMPORTANT: responses is an array, get the first element
+    const response = responses[0];
+    const result = response.queryResult;
+    
+    // Log the RAW response to compare with console
+    console.log('📥 RAW Dialogflow Response:', JSON.stringify({
+      responseId: response.responseId,
+      queryText: result.queryText,
+      intent: result.intent?.displayName,
+      confidence: result.intentDetectionConfidence,
+      fulfillmentText: result.fulfillmentText,
+      languageCode: result.languageCode
+    }, null, 2));
     
     // Log detailed response information
     console.log('📥 Dialogflow Response:', {
       intent: result.intent?.displayName || 'No intent matched',
       confidence: result.intentDetectionConfidence,
       fulfillmentText: result.fulfillmentText,
-      allRequiredParamsPresent: result.allRequiredParamsPresent
+      allRequiredParamsPresent: result.allRequiredParamsPresent,
+      action: result.action,
+      parameters: result.parameters,
+      diagnosticInfo: result.diagnosticInfo
     });
+    
+    // Check if Small Talk is being matched when it shouldn't
+    const isSmallTalk = result.intent?.displayName?.toLowerCase().includes('smalltalk') || 
+                        result.action?.toLowerCase().includes('smalltalk');
+    
+    if (isSmallTalk) {
+      console.log('ℹ️ Small Talk intent matched - consider disabling or adding more specific training phrases');
+    }
+    
+    // NEW: Check if this is a problem with the agent itself
+    if (result.intentDetectionConfidence === 0 && !result.intent) {
+      console.error('❌ CRITICAL: Dialogflow returned 0 confidence with no intent.');
+      console.error('This usually means:');
+      console.error('1. Agent has no trained intents');
+      console.error('2. Agent is not trained/published');
+      console.error('3. Language code mismatch');
+      console.error('4. Project ID or credentials are incorrect');
+    }
 
     // Check if intent detection confidence is too low
     if (result.intentDetectionConfidence < CONFIG.CONFIDENCE_THRESHOLD) {
