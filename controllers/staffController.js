@@ -7,19 +7,34 @@ const db = require('../db');
 
 // Initialize Resend
 const resend = new Resend(process.env.RESEND_API_KEY);
+console.log('Resend API Key exists:', !!process.env.RESEND_API_KEY);
+console.log('Resend API Key starts with:', process.env.RESEND_API_KEY?.substring(0, 10));
 
 // Helper function to send welcome email
 async function sendWelcomeEmail(staff) {
-  try {
-    console.log('[sendWelcomeEmail] Sending welcome email', {
-      timestamp: new Date().toISOString(),
-      email: staff.email,
-      name: staff.name,
-      position: staff.position
-    });
+  console.log('[sendWelcomeEmail - Staff] STARTING email send', {
+    timestamp: new Date().toISOString(),
+    email: staff.email,
+    name: staff.name,
+    position: staff.position,
+    hasRandomPassword: !!staff.randomPassword,
+    randomPasswordValue: staff.randomPassword, // Temporary - remove after debugging
+    hasResendKey: !!process.env.RESEND_API_KEY
+  });
 
-    await resend.emails.send({
-      from: 'MindU <onboarding@resend.dev>',
+  if (!staff.randomPassword) {
+    console.error('[sendWelcomeEmail - Staff] ERROR: No randomPassword provided!', {
+      timestamp: new Date().toISOString(),
+      staffKeys: Object.keys(staff)
+    });
+    return;
+  }
+
+  try {
+    console.log('[sendWelcomeEmail - Staff] About to call resend.emails.send...');
+    
+    const result = await resend.emails.send({
+      from: 'MindU <onboarding@mind-u.space>',
       to: staff.email,
       subject: 'Welcome to MindU',
       html: `
@@ -32,16 +47,26 @@ async function sendWelcomeEmail(staff) {
       `,
     });
     
-    console.log('[sendWelcomeEmail] Welcome email sent successfully', {
+    console.log('[sendWelcomeEmail - Staff] Resend API response:', {
+      timestamp: new Date().toISOString(),
+      email: staff.email,
+      result: result
+    });
+    
+    console.log('[sendWelcomeEmail - Staff] Welcome email sent successfully', {
       timestamp: new Date().toISOString(),
       email: staff.email
     });
   } catch (error) {
-    console.error('[sendWelcomeEmail] Failed to send welcome email', {
+    console.error('[sendWelcomeEmail - Staff] DETAILED ERROR:', {
       timestamp: new Date().toISOString(),
       email: staff.email,
-      error: error.message,
-      stack: error.stack
+      errorMessage: error.message,
+      errorName: error.name,
+      errorCode: error.code,
+      errorResponse: error.response?.data,
+      stack: error.stack,
+      fullError: JSON.stringify(error, null, 2)
     });
   }
 }
@@ -56,7 +81,7 @@ async function sendResetCodeEmail(email, code) {
     });
 
     await resend.emails.send({
-      from: 'MindU <onboarding@resend.dev>',
+      from: 'MindU <onboarding@mind-u.space>',
       to: email,
       subject: 'Password Reset Code',
       html: `

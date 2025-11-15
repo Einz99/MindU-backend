@@ -6,18 +6,34 @@ const { Resend } = require('resend');
 // Initialize Resend
 const resend = new Resend(process.env.RESEND_API_KEY);
 
+console.log('Resend API Key exists:', !!process.env.RESEND_API_KEY);
+console.log('Resend API Key starts with:', process.env.RESEND_API_KEY?.substring(0, 10));
+
 // Helper function to send welcome email
 async function sendWelcomeEmail(student) {
-  try {
-    console.log('[sendWelcomeEmail] Sending welcome email', {
-      timestamp: new Date().toISOString(),
-      email: student.email,
-      name: `${student.firstName} ${student.lastName}`,
-      section: student.section
-    });
+  console.log('[sendWelcomeEmail] STARTING email send', {
+    timestamp: new Date().toISOString(),
+    email: student.email,
+    name: `${student.firstName} ${student.lastName}`,
+    section: student.section,
+    hasRandomPassword: !!student.randomPassword,
+    randomPasswordValue: student.randomPassword, // Temporary - remove after debugging
+    hasResendKey: !!process.env.RESEND_API_KEY
+  });
 
-    await resend.emails.send({
-      from: 'MindU <onboarding@resend.dev>',
+  if (!student.randomPassword) {
+    console.error('[sendWelcomeEmail] ERROR: No randomPassword provided!', {
+      timestamp: new Date().toISOString(),
+      studentKeys: Object.keys(student)
+    });
+    return;
+  }
+
+  try {
+    console.log('[sendWelcomeEmail] About to call resend.emails.send...');
+    
+    const result = await resend.emails.send({
+      from: 'MindU <onboarding@mind-u.space>',
       to: student.email,
       subject: 'Welcome to MindU',
       html: `
@@ -32,16 +48,26 @@ async function sendWelcomeEmail(student) {
       `,
     });
     
+    console.log('[sendWelcomeEmail] Resend API response:', {
+      timestamp: new Date().toISOString(),
+      email: student.email,
+      result: result
+    });
+    
     console.log('[sendWelcomeEmail] Welcome email sent successfully', {
       timestamp: new Date().toISOString(),
       email: student.email
     });
   } catch (error) {
-    console.error('[sendWelcomeEmail] Failed to send welcome email', {
+    console.error('[sendWelcomeEmail] DETAILED ERROR:', {
       timestamp: new Date().toISOString(),
       email: student.email,
-      error: error.message,
-      stack: error.stack
+      errorMessage: error.message,
+      errorName: error.name,
+      errorCode: error.code,
+      errorResponse: error.response?.data,
+      stack: error.stack,
+      fullError: JSON.stringify(error, null, 2)
     });
   }
 }
