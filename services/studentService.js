@@ -147,20 +147,26 @@ exports.bulkInsertStudents = async (students) => {
   const sectionToAdviserMap = new Map(advisers.map(a => [a.section, a.name]));
 
   // 2. Prepare students with adviser auto-assigned and passwords
-  const formattedStudents = students.map(student => {
-    const password = crypto.randomBytes(5).toString("hex");
-    const adviserName = sectionToAdviserMap.get(student.section) || null;
+  // ✅ Use Promise.all to properly await all bcrypt operations
+  const formattedStudents = await Promise.all(
+    students.map(async student => {
+      const plainPassword = crypto.randomBytes(5).toString("hex"); // Plain text for email
+      const hashedPassword = await bcrypt.hash(plainPassword, 10); // Hash for DB
+      const passwordLength = plainPassword.length;
+      const adviserName = sectionToAdviserMap.get(student.section) || null;
 
-    return {
-      firstName: student.firstName || null,
-      lastName: student.lastName || null,
-      section: student.section || null,
-      adviser: adviserName,
-      email: student.email || null,
-      password,
-      randomPassword: password, // Keep for email use
-    };
-  });
+      return {
+        firstName: student.firstName || null,
+        lastName: student.lastName || null,
+        section: student.section || null,
+        adviser: adviserName,
+        email: student.email || null,
+        plainPassword,      // ✅ Plain text for email
+        hashedPassword,     // ✅ Hash for database
+        passwordLength,     // ✅ Store length
+      };
+    })
+  );
 
   const emails = formattedStudents.map(s => s.email).filter(email => email);
   if (emails.length === 0) throw new Error("No valid emails provided.");
@@ -182,9 +188,9 @@ exports.bulkInsertStudents = async (students) => {
     };
   }
 
-  // 5. Bulk insert
+  // 5. Bulk insert - ✅ Include passwordLength
   const sql = `
-    INSERT INTO students (firstName, lastName, section, adviser, email, password)
+    INSERT INTO students (firstName, lastName, section, adviser, email, password, passwordLength)
     VALUES ?
   `;
   const values = newStudents.map(s => [
@@ -193,11 +199,12 @@ exports.bulkInsertStudents = async (students) => {
     s.section,
     s.adviser,
     s.email,
-    s.password,
+    s.hashedPassword,    // ✅ Store hashed password
+    s.passwordLength,    // ✅ Store password length
   ]);
   const [result] = await db.query(sql, [values]);
 
-  // 6. Send email to each new student using Resend
+  // 6. Send email with PLAIN password
   for (const student of newStudents) {
     try {
       await resend.emails.send({
@@ -207,7 +214,7 @@ exports.bulkInsertStudents = async (students) => {
         html: `
           <p>Welcome <strong>${student.firstName} ${student.lastName}</strong>,</p>
           <p>Your account has been <strong>created successfully</strong>.</p>
-          <p><strong>Temporary Password:</strong> <code>${student.randomPassword}</code></p>
+          <p><strong>Temporary Password:</strong> <code>${student.plainPassword}</code></p>
           <p>Please change your password as soon as possible after logging in.</p>
           <hr/>
           <p><em>This is an automated message. Please do not reply.</em></p>
@@ -217,7 +224,6 @@ exports.bulkInsertStudents = async (students) => {
       console.log(`[bulkInsertStudents] Welcome email sent to: ${student.email}`);
     } catch (emailError) {
       console.error(`[bulkInsertStudents] Failed to send email to ${student.email}:`, emailError);
-      // Continue processing even if email fails
     }
   }
 
