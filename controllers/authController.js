@@ -242,7 +242,7 @@ async function sendResetCodeEmail(email, code) {
   console.log('[sendResetCodeEmail] Sending reset code to:', email);
   try {
     await resend.emails.send({
-      from: 'MindU <onboarding@resend.dev>',
+      from: 'MindU <onboarding@mind-u.space>',
       to: email,
       subject: 'Password Reset Code',
       html: `
