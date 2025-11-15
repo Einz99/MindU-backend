@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, shrink-to-fit=yes">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, shrink-to-fit=yes, maximum-scale=1.0, minimum-scale=1.0">
     <title>Unity Web Player | MindU Pet</title>
     <style>
       * {
@@ -16,22 +16,33 @@
         width: 100%;
         height: 100%;
         overflow: hidden;
-        background: #000000; /* Black background for side letterboxing */
+        background: #000000;
+        position: fixed;
+        top: 0;
+        left: 0;
       }
 
       #unity-container {
+        position: fixed;
+        top: 0;
+        left: 0;
         width: 100%;
         height: 100%;
         display: flex;
         justify-content: center;
         align-items: center;
+        background: #000000;
       }
 
       #unity-canvas {
         display: block;
         background: #231F20;
-        height: 100%; /* Always fill the full height */
-        width: auto; /* Width adjusts to maintain aspect ratio */
+        /* Force aspect ratio container */
+        max-width: 56.25vh; /* 1080/1920 = 0.5625, so max-width = 56.25% of viewport height */
+        max-height: 100vh;
+        width: auto !important;
+        height: 100vh !important;
+        object-fit: contain;
       }
     </style>
   </head>
@@ -43,25 +54,51 @@
     <script src="Build/petGame.loader.js"></script>
     <script>
       const canvas = document.querySelector("#unity-canvas");
+      const container = document.querySelector("#unity-container");
       
-      // Fit canvas to full height with side letterbox
+      // Fit canvas to maintain 9:16 aspect ratio (portrait)
       function fitCanvas() {
+        const windowWidth = window.innerWidth;
         const windowHeight = window.innerHeight;
-        const gameAspect = 1080 / 1920; // Width / Height = 0.5625
+        const gameAspect = 1080 / 1920; // 0.5625 (9:16 ratio)
         
-        // Always use full height, calculate width based on aspect ratio
-        canvas.style.height = windowHeight + 'px';
-        canvas.style.width = (windowHeight * gameAspect) + 'px';
+        // Calculate dimensions based on height priority
+        let canvasHeight = windowHeight;
+        let canvasWidth = canvasHeight * gameAspect;
+        
+        // If calculated width exceeds window width, scale down
+        if (canvasWidth > windowWidth) {
+          canvasWidth = windowWidth;
+          canvasHeight = canvasWidth / gameAspect;
+        }
+        
+        // Apply dimensions with !important via inline styles
+        canvas.style.cssText = `
+          width: ${canvasWidth}px !important;
+          height: ${canvasHeight}px !important;
+          max-width: ${canvasWidth}px !important;
+          max-height: ${canvasHeight}px !important;
+          display: block !important;
+          background: #231F20 !important;
+        `;
+        
+        console.log(`Canvas sized: ${canvasWidth}x${canvasHeight}`);
       }
 
       // Initial fit
       fitCanvas();
 
       // Refit on window resize or orientation change
-      window.addEventListener('resize', fitCanvas);
-      window.addEventListener('orientationchange', () => {
+      window.addEventListener('resize', () => {
         setTimeout(fitCanvas, 100);
       });
+      
+      window.addEventListener('orientationchange', () => {
+        setTimeout(fitCanvas, 200);
+      });
+
+      // Also listen for DOMContentLoaded
+      document.addEventListener('DOMContentLoaded', fitCanvas);
 
       createUnityInstance(canvas, {
         arguments: [],
@@ -72,16 +109,31 @@
         companyName: "DefaultCompany",
         productName: "MindU Pet",
         productVersion: "1.0",
-        matchWebGLToCanvasSize: true,
-        devicePixelRatio: window.devicePixelRatio || 1,
+        matchWebGLToCanvasSize: false, // Changed to false to prevent Unity from overriding
+        devicePixelRatio: 1, // Fixed at 1 for consistency
       }).then((unityInstance) => {
         window.unityInstance = unityInstance;
         console.log("✅ Unity game loaded");
-        fitCanvas(); // Ensure proper size after loading
+        
+        // Force resize after Unity loads
+        setTimeout(() => {
+          fitCanvas();
+        }, 500);
       }).catch((message) => {
         console.error("❌ Unity load error:", message);
         alert("Failed to load game: " + message);
       });
+
+      // Prevent any WebView zoom/scale issues
+      document.addEventListener('gesturestart', function (e) {
+        e.preventDefault();
+      });
+      
+      document.addEventListener('touchmove', function (e) {
+        if (e.scale !== 1) {
+          e.preventDefault();
+        }
+      }, { passive: false });
     </script>
   </body>
 </html>

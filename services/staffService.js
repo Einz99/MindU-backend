@@ -12,7 +12,7 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 const UPLOAD_DIR = path.join(__dirname, "../resources/profile_pics");
 
 exports.getAllStaffs = async () => {
-  const [rows] = await db.query("SELECT * FROM staffs");
+  const [rows] = await db.query("SELECT * FROM staffs ORDER BY id DESC");
   return rows;
 };
 

@@ -1,13 +1,14 @@
 const db = require('../db');
 const crypto = require("crypto");
 const { Resend } = require('resend');
-// const bcrypt = require("bcrypt");
+const bcrypt = require("bcrypt");
 
 // Initialize Resend
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 exports.getAllStudents = async () => {
-  const [rows] = await db.query("SELECT * FROM students");
+  // Assuming 'id' is the auto-incrementing primary key or you have a 'created_at' column
+  const [rows] = await db.query("SELECT * FROM students ORDER BY id DESC");
   return rows;
 };
 
@@ -29,26 +30,26 @@ exports.createStudent = async (studentData) => {
 
   // Generate a random 10-character password
   const randomPassword = crypto.randomBytes(5).toString("hex"); // 10 characters
-  //   const hashedPassword = await bcrypt.hash(randomPassword, 10); // 10 rounds of salt
+  const hashedPassword = await bcrypt.hash(randomPassword, 10); // 10 rounds of salt
   const passwordLength = randomPassword.length;
 
-  const sql = `
-    INSERT INTO students 
-      (password, lastName, firstName, adviser, age, gender, email, section)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `;
+  // const sql = `
+  //   INSERT INTO students 
+  //     (password, lastName, firstName, adviser, age, gender, email, section)
+  //   VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  // `;
 
-  /*
+  
   const sql = `
     INSERT INTO students 
       (password, lastName, firstName, adviser, age, gender, email, section, passwordLength)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
-  */
+  
 
   const [result] = await db.query(sql, [
-    randomPassword, // Store generated password
-    //hashedPassword,
+    // randomPassword, // Store generated password
+    hashedPassword,
     lastName,
     firstName,
     adviser,
@@ -56,7 +57,7 @@ exports.createStudent = async (studentData) => {
     gender,
     email,
     section,
-    // passwordLength,
+    passwordLength,
   ]);
 
   return {
@@ -89,8 +90,7 @@ exports.updateStudent = async (id, studentData) => {
   let hashedPassword = null;
 
   if (password) {
-    //const bcrypt = require('bcrypt'); // Ensure bcrypt is imported
-    //hashedPassword = await bcrypt.hash(password, 10);
+    hashedPassword = await bcrypt.hash(password, 10);
     passwordLength = password.length;
   }
 
@@ -110,7 +110,7 @@ exports.updateStudent = async (id, studentData) => {
   `;
 
   const [result] = await db.query(sql, [
-    password, //hashedPassword
+    hashedPassword, //hashedPassword
     lastName,
     firstName,
     adviser,
