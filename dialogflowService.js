@@ -25,7 +25,7 @@ const client = new dialogflow.SessionsClient({
 
 // Configuration
 const CONFIG = {
-  CONFIDENCE_THRESHOLD: 0.2, // Adjust based on your needs (0.3-0.5 recommended)
+  CONFIDENCE_THRESHOLD: 0.3, // Adjust based on your needs (0.3-0.5 recommended)
   TIMEOUT_MS: 10000,
   FALLBACK_RESPONSE: 'I\'m not quite sure how to help with that. Could you please rephrase or ask something else?'
 };
