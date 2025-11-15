@@ -7,7 +7,7 @@ const bcrypt = require("bcrypt");
 const { Resend } = require('resend');
 
 // Initialize Resend
-const resend = new Resend(process.env.RESEND_API_KEY);
+const resend = new Resend(process.env.RESEND_API_KEY2);
 
 const broadcastUpdates = async (io, userId) => {
   console.log('[broadcastUpdates] Broadcasting update for user:', userId);
@@ -242,7 +242,7 @@ async function sendResetCodeEmail(email, code) {
   console.log('[sendResetCodeEmail] Sending reset code to:', email);
   try {
     await resend.emails.send({
-      from: 'MindU <onboarding@mind-u.space>',
+      from: 'MindU <noreply@mind-u.space>',
       to: email,
       subject: 'Password Reset Code',
       html: `

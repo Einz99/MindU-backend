@@ -7,6 +7,7 @@ const db = require('../db');
 
 // Initialize Resend
 const resend = new Resend(process.env.RESEND_API_KEY);
+const resend2 = new Resend(process.env.RESEND_API_KEY2);
 console.log('Resend API Key exists:', !!process.env.RESEND_API_KEY);
 console.log('Resend API Key starts with:', process.env.RESEND_API_KEY?.substring(0, 10));
 
@@ -80,8 +81,8 @@ async function sendResetCodeEmail(email, code) {
       codeLength: code.length
     });
 
-    await resend.emails.send({
-      from: 'MindU <onboarding@mind-u.space>',
+    await resend2.emails.send({
+      from: 'MindU <noreply@mind-u.space>',
       to: email,
       subject: 'Password Reset Code',
       html: `
