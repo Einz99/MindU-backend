@@ -1,4 +1,4 @@
-// dialogflowService.js
+// dialogflowService.js - Fixed with proper fallback handling
 const dialogflow = require('@google-cloud/dialogflow');
 const path = require('path');
 const fs = require('fs');
@@ -23,16 +23,33 @@ const client = new dialogflow.SessionsClient({
   projectId: credentials.project_id
 });
 
-// This function will handle the Dialogflow interaction
+// Configuration
+const CONFIG = {
+  CONFIDENCE_THRESHOLD: 0.4, // Adjust based on your needs (0.3-0.5 recommended)
+  TIMEOUT_MS: 10000,
+  FALLBACK_RESPONSE: 'I\'m not quite sure how to help with that. Could you please rephrase or ask something else?'
+};
+
+/**
+ * Get response from Dialogflow
+ * @param {string} userMessage - The user's message
+ * @param {string} userId - Unique user identifier
+ * @returns {Promise<string>} - Bot response
+ */
 async function getDialogflowResponse(userMessage, userId) {
   try {
-    
-    // Generate a unique session ID based on userId
-    const sessionId = `session-${userId}-${Date.now()}`;
+    // FIXED: Use consistent session ID per user (no Date.now())
+    // This maintains conversation context across messages
+    const sessionId = `session-${userId}`;
     
     // Create the session path using the project_id from credentials
     const sessionPath = client.projectAgentSessionPath(credentials.project_id, sessionId);
     
+    console.log('📤 Sending to Dialogflow:', {
+      message: userMessage,
+      sessionId,
+      timestamp: new Date().toISOString()
+    });
 
     const request = {
       session: sessionPath,
@@ -44,10 +61,9 @@ async function getDialogflowResponse(userMessage, userId) {
       },
     };
 
-
     // Add timeout to the Dialogflow request
     const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('Dialogflow request timeout after 10 seconds')), 10000);
+      setTimeout(() => reject(new Error('Dialogflow request timeout')), CONFIG.TIMEOUT_MS);
     });
 
     const dialogflowPromise = client.detectIntent(request);
@@ -57,7 +73,30 @@ async function getDialogflowResponse(userMessage, userId) {
     
     const result = responses[0].queryResult;
     
-    const responseText = result.fulfillmentText || 'I apologize, but I couldn\'t understand your message. Could you please rephrase it?';
+    // Log detailed response information
+    console.log('📥 Dialogflow Response:', {
+      intent: result.intent?.displayName || 'No intent matched',
+      confidence: result.intentDetectionConfidence,
+      fulfillmentText: result.fulfillmentText,
+      allRequiredParamsPresent: result.allRequiredParamsPresent
+    });
+
+    // Check if intent detection confidence is too low
+    if (result.intentDetectionConfidence < CONFIG.CONFIDENCE_THRESHOLD) {
+      console.warn(`⚠️ Low confidence (${result.intentDetectionConfidence}), using fallback`);
+      return CONFIG.FALLBACK_RESPONSE;
+    }
+
+    // Check if it's explicitly a fallback intent
+    const isFallbackIntent = result.intent?.displayName?.toLowerCase().includes('fallback') || 
+                             result.intent?.isFallback;
+    
+    if (isFallbackIntent) {
+      console.log('ℹ️ Fallback intent triggered');
+    }
+
+    // Return the fulfillment text or fallback
+    const responseText = result.fulfillmentText || CONFIG.FALLBACK_RESPONSE;
     
     return responseText;
     
@@ -66,23 +105,39 @@ async function getDialogflowResponse(userMessage, userId) {
       message: error.message,
       code: error.code,
       details: error.details,
-      stack: error.stack?.substring(0, 500) + '...' // Truncate long stack traces
+      userId,
+      timestamp: new Date().toISOString()
     });
     
-    // Return a fallback response instead of throwing an error
-    const fallbackResponse = 'I\'m currently experiencing technical difficulties. Please try again in a moment.';
-    return fallbackResponse;
+    // Return a technical difficulty message
+    return 'I\'m currently experiencing technical difficulties. Please try again in a moment.';
   }
 }
 
-// Test function to verify Dialogflow connection
+/**
+ * Test Dialogflow connection and configuration
+ */
 async function testDialogflowConnection() {
+  console.log('\n🧪 Testing Dialogflow Connection...\n');
+  
+  const testCases = [
+    { message: 'Hello', expected: 'Should match greeting intent' },
+    { message: 'I feel anxious', expected: 'Should match anxiety intent' },
+    { message: 'xyzabc123nonsense', expected: 'Should trigger fallback' },
+  ];
+
   try {
-    const response = await getDialogflowResponse('Hello', 'test-user');
-    console.log('Test response:', response);
+    for (const testCase of testCases) {
+      console.log(`Testing: "${testCase.message}"`);
+      const response = await getDialogflowResponse(testCase.message, 'test-user');
+      console.log(`Response: "${response}"`);
+      console.log(`Expected: ${testCase.expected}\n`);
+    }
+    
+    console.log('✅ Connection test completed');
     return true;
   } catch (error) {
-    console.error('Dialogflow connection test failed:', error);
+    console.error('❌ Dialogflow connection test failed:', error);
     return false;
   }
 }
@@ -90,5 +145,6 @@ async function testDialogflowConnection() {
 // Export the functions
 module.exports = { 
   getDialogflowResponse,
-  testDialogflowConnection
+  testDialogflowConnection,
+  CONFIG // Export config for easy adjustment
 };
