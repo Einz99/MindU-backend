@@ -19,11 +19,6 @@ const upload = multer({ storage });
 router.get("/", staffController.getAllStaffs);
 router.get("/:id", staffController.getStaffById);
 router.post("/", staffController.createStaff);
-router.put("/:id", staffController.updateStaff);
-router.delete("/:id", staffController.deleteStaff);
-router.put("/email/:id", staffController.updateStaffEmail);
-router.put("/password/:id", staffController.updateStaffPassword);
-router.put("/picture/:id", upload.single("picture"), staffController.updateStaffPicture);
 router.post('/bulk-insert', staffController.bulkInsertAdvisers);
 
 router.post("/login", staffController.loginStaff);
@@ -33,6 +28,15 @@ router.post('/check-user', staffController.checkUser);
 router.post('/forgot-password', staffController.forgotPassword);
 router.post('/verify-code', staffController.verifyCode);
 router.post('/reset-password', staffController.resetPassword);
+
+router.put("/:id", staffController.updateStaff);
+router.put("/email/:id", staffController.updateStaffEmail);
+router.put("/password/:id", staffController.updateStaffPassword);
+router.put("/picture/:id", upload.single("picture"), staffController.updateStaffPicture);
+
+router.delete("/:id", staffController.deleteStaff);
+
+
 
 
 module.exports = router;

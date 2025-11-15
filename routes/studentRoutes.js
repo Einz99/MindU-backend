@@ -5,8 +5,8 @@ const studentController = require('../controllers/studentController');
 router.get('/', studentController.getAllStudents);
 router.get('/:id', studentController.getStudentById);
 router.post('/', studentController.createStudent);
+router.post('/bulk-insert', studentController.bulkInsertStudents);
 router.put('/:id', studentController.updateStudent);
 router.delete('/:id', studentController.deleteStudent);
-router.post('/bulk-insert', studentController.bulkInsertStudents);
 
 module.exports = router;
