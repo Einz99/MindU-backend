@@ -526,7 +526,8 @@ exports.updateStaffPicture = async (req, res) => {
   const startTime = Date.now();
   try {
     const { id } = req.params;
-    const picture = req.file ? req.file.filename : null;
+    // Save with the correct database path format
+    const picture = req.file ? `/public/profile/${req.file.filename}` : null;
     
     console.log('[updateStaffPicture] Request started', {
       timestamp: new Date().toISOString(),

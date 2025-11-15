@@ -5,6 +5,7 @@ const jwt = require("jsonwebtoken");
 const db = require("../db");
 const bcrypt = require("bcrypt");
 const { Resend } = require('resend');
+const { compressAndResize } = require('../utils/imageCompression');
 
 // Initialize Resend
 const resend = new Resend(process.env.RESEND_API_KEY2);
@@ -24,15 +25,18 @@ const broadcastUpdates = async (io, userId) => {
   }
 };
 
+// Ensure temp directory exists
+const tempDir = path.join(__dirname, "../public/temp");
+if (!fs.existsSync(tempDir)) {
+  fs.mkdirSync(tempDir, { recursive: true });
+  console.log('[Setup] Created temp directory:', tempDir);
+}
+
+// Configure storage for uploaded files (temp location)
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const uploadPath = path.join(__dirname, "../resources/profile_pics");
-    console.log('[multer] Upload destination:', uploadPath);
-    if (!fs.existsSync(uploadPath)) {
-      fs.mkdirSync(uploadPath, { recursive: true });
-      console.log('[multer] Created upload directory');
-    }
-    cb(null, uploadPath);
+    console.log('[multer] Upload destination (temp):', tempDir);
+    cb(null, tempDir);
   },
   filename: (req, file, cb) => {
     const filename = `profile_${Date.now()}${path.extname(file.originalname)}`;
@@ -42,6 +46,44 @@ const storage = multer.diskStorage({
 });
 
 const upload = multer({ storage }).single("profilePic"); 
+
+// Helper function to compress and move profile picture
+const processProfilePicture = async (file) => {
+  const finalDir = path.join(__dirname, '../public/profile');
+  if (!fs.existsSync(finalDir)) {
+    fs.mkdirSync(finalDir, { recursive: true });
+    console.log('[processProfilePicture] Created profile directory:', finalDir);
+  }
+  
+  const finalPath = path.join(finalDir, file.filename);
+  
+  console.log('[processProfilePicture] Processing profile picture:', {
+    filename: file.filename,
+    mimetype: file.mimetype,
+    tempPath: file.path,
+    finalPath: finalPath,
+    exists: fs.existsSync(file.path)
+  });
+  
+  if (!fs.existsSync(file.path)) {
+    throw new Error(`Profile picture not found at temp location: ${file.path}`);
+  }
+  
+  // Compress and resize profile picture
+  await compressAndResize(file, finalPath, {
+    width: 800,
+    quality: 85
+  });
+  console.log('[processProfilePicture] Profile picture processed successfully');
+  
+  // Clean up temp file
+  if (fs.existsSync(file.path)) {
+    fs.unlinkSync(file.path);
+    console.log('[processProfilePicture] Temp file cleaned up');
+  }
+  
+  return `/public/profile/${file.filename}`;
+};
 
 exports.login = async (req, res) => {
   const { identifier, password } = req.body;
@@ -181,8 +223,9 @@ exports.updateProfile = async (req, res) => {
       
       let profilePicPath = null;
       if (req.file) {
-        profilePicPath = `/resources/profile_pics/${req.file.filename}`;
-        console.log('[updateProfile] New profile picture uploaded:', profilePicPath);
+        // Process and compress the image
+        profilePicPath = await processProfilePicture(req.file);
+        console.log('[updateProfile] New profile picture uploaded and compressed:', profilePicPath);
       }
 
       const sql = "UPDATE students SET age = ?, gender = ?, profilePic = ? WHERE id = ?";
@@ -193,6 +236,17 @@ exports.updateProfile = async (req, res) => {
       return res.json({ success: true, message: "Profile updated successfully", profilePicPath });
     } catch (error) {
       console.error("[updateProfile] Error updating profile:", error);
+      
+      // Clean up temp file on error
+      if (req.file && fs.existsSync(req.file.path)) {
+        try {
+          fs.unlinkSync(req.file.path);
+          console.log('[updateProfile] Cleaned up temp file on error');
+        } catch (cleanupError) {
+          console.error('[updateProfile] Failed to cleanup temp file:', cleanupError);
+        }
+      }
+      
       return res.status(500).json({ message: "Database error" });
     }
   });
@@ -447,8 +501,9 @@ exports.updateProfilePic = async (req, res) => {
       const oldProfilePic = user[0]?.profilePic;
       console.log('[updateProfilePic] Old profile picture:', oldProfilePic);
       
-      // Set new profile pic path
-      const profilePicPath = `/resources/profile_pics/${req.file.filename}`;
+      // Process and compress the new profile picture
+      const profilePicPath = await processProfilePicture(req.file);
+      console.log('[updateProfilePic] New profile picture compressed:', profilePicPath);
 
       // Update in database
       const sql = "UPDATE students SET profilePic = ? WHERE id = ?";
@@ -472,6 +527,17 @@ exports.updateProfilePic = async (req, res) => {
       });
     } catch (error) {
       console.error("[updateProfilePic] Error updating profile picture:", error);
+      
+      // Clean up temp file on error
+      if (req.file && fs.existsSync(req.file.path)) {
+        try {
+          fs.unlinkSync(req.file.path);
+          console.log('[updateProfilePic] Cleaned up temp file on error');
+        } catch (cleanupError) {
+          console.error('[updateProfilePic] Failed to cleanup temp file:', cleanupError);
+        }
+      }
+      
       return res.status(500).json({ message: "Database error" });
     }
   });
