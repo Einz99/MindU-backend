@@ -80,6 +80,21 @@ exports.insertPet = async (req, res) => {
       return res.status(400).json({ message: "Missing required fields: student_id, pet_name, pet_type" });
     }
 
+    // CHECK IF PET ALREADY EXISTS FOR THIS STUDENT
+    const existingPets = await petService.getPetByStudentId(student_id);
+    
+    if (existingPets && existingPets.length > 0) {
+      console.warn('[insertPet] Pet already exists - suppressing duplicate insert', {
+        timestamp: new Date().toISOString(),
+        student_id,
+        existing_pet_id: existingPets[0].id,
+        duration: `${Date.now() - startTime}ms`
+      });
+      
+      // Return 201 (success) but don't actually create anything
+      return res.status(201).json(existingPets[0]);
+    }
+
     const newPet = await petService.insertPet(student_id, pet_name, pet_type);
     
     console.log('[insertPet] Pet created', {
