@@ -1006,12 +1006,12 @@ exports.resetPassword = async (req, res) => {
   }
 };
 
-exports.bulkInsertGuidanceStaff = async (req, res) => {
+exports.bulkInsertAdvisers = async (req, res) => {
   const startTime = Date.now();
   try {
     const { staffs } = req.body;
     
-    console.log('[bulkInsertGuidanceStaff] Bulk insert started', {
+    console.log('[bulkInsertAdvisers] Bulk insert started', {
       timestamp: new Date().toISOString(),
       count: staffs?.length || 0,
       ip: req.ip
@@ -1019,7 +1019,7 @@ exports.bulkInsertGuidanceStaff = async (req, res) => {
 
     if (!Array.isArray(staffs) || staffs.length === 0) {
       return res.status(400).json({ 
-        message: "Invalid request. Provide an array of staff members." 
+        message: "Invalid request. Provide an array of advisers." 
       });
     }
 
@@ -1029,9 +1029,18 @@ exports.bulkInsertGuidanceStaff = async (req, res) => {
       existingEmails.map(e => e.email.toLowerCase())
     );
 
+    // Get all existing sections with advisers
+    const [existingSections] = await db.query(
+      'SELECT section FROM staffs WHERE position = "Adviser"'
+    );
+    const existingSectionSet = new Set(
+      existingSections.map(s => s.section)
+    );
+
     const errors = [];
     const validStaffs = [];
     const seenEmails = new Set();
+    const seenSections = new Set();
 
     staffs.forEach((staff, index) => {
       const rowNumber = index + 1;
@@ -1048,7 +1057,7 @@ exports.bulkInsertGuidanceStaff = async (req, res) => {
       } else {
         const emailLower = staff.email.toLowerCase();
         if (existingEmailSet.has(emailLower)) {
-          rowErrors.push('Email already exists');
+          rowErrors.push('Email already exists in database');
         } else if (seenEmails.has(emailLower)) {
           rowErrors.push('Duplicate email in upload');
         } else {
@@ -1056,16 +1065,25 @@ exports.bulkInsertGuidanceStaff = async (req, res) => {
         }
       }
 
-      // Validate position
-      if (!staff.position || !["Guidance Staff", "Guidance Counselor"].includes(staff.position)) {
-        rowErrors.push('Invalid position (must be Guidance Staff or Guidance Counselor)');
+      // Validate section for advisers
+      if (!staff.section || staff.section.trim() === '') {
+        rowErrors.push('Section is required for advisers');
+      } else {
+        if (existingSectionSet.has(staff.section)) {
+          rowErrors.push(`Section "${staff.section}" already has an assigned adviser`);
+        } else if (seenSections.has(staff.section)) {
+          rowErrors.push(`Duplicate section in upload`);
+        } else {
+          seenSections.add(staff.section);
+        }
       }
 
-      // Set default status
+      // Set position to Adviser
+      staff.position = "Adviser";
       staff.status = "Active";
 
       if (rowErrors.length > 0) {
-        errors.push(`Row ${rowNumber} (${staff.name}): ${rowErrors.join(', ')}`);
+        errors.push(`Row ${rowNumber} (${staff.name || 'N/A'}): ${rowErrors.join(', ')}`);
       } else {
         validStaffs.push(staff);
       }
@@ -1073,19 +1091,18 @@ exports.bulkInsertGuidanceStaff = async (req, res) => {
 
     if (errors.length > 0 && validStaffs.length === 0) {
       return res.status(400).json({
-        message: "Bulk upload validation failed",
+        message: "Bulk upload validation failed. All rows have errors.",
         errors: errors
       });
     }
 
     let insertedCount = 0;
     if (validStaffs.length > 0) {
-      // Use existing bulk insert service
       const result = await staffService.bulkInsertAdvisers(validStaffs);
       insertedCount = result.insertedCount;
     }
 
-    console.log('[bulkInsertGuidanceStaff] Bulk insert completed', {
+    console.log('[bulkInsertAdvisers] Bulk insert completed', {
       timestamp: new Date().toISOString(),
       totalRequested: staffs.length,
       insertedCount,
@@ -1095,18 +1112,18 @@ exports.bulkInsertGuidanceStaff = async (req, res) => {
 
     const responseMessage = errors.length > 0
       ? {
-          message: `${insertedCount} staff members inserted successfully. ${errors.length} rows had errors.`,
+          message: `${insertedCount} advisers inserted successfully. ${errors.length} rows had errors.`,
           insertedCount,
           errors
         }
       : {
-          message: `${insertedCount} staff members inserted successfully.`,
+          message: `${insertedCount} advisers inserted successfully.`,
           insertedCount
         };
     
     return res.status(200).json(responseMessage);
   } catch (error) {
-    console.error('[bulkInsertGuidanceStaff] Bulk insert failed', {
+    console.error('[bulkInsertAdvisers] Bulk insert failed', {
       timestamp: new Date().toISOString(),
       error: error.message,
       duration: `${Date.now() - startTime}ms`
