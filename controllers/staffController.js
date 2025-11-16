@@ -11,6 +11,16 @@ const resend2 = new Resend(process.env.RESEND_API_KEY2);
 console.log('Resend API Key exists:', !!process.env.RESEND_API_KEY);
 console.log('Resend API Key starts with:', process.env.RESEND_API_KEY?.substring(0, 10));
 
+const validateName = (name) => {
+  const nameRegex = /^[a-zA-Z\s\-']+$/;
+  return nameRegex.test(name) && name.trim().length > 0;
+};
+
+const validateEmail = (email) => {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(email);
+};
+
 // Helper function to send welcome email
 async function sendWelcomeEmail(staff) {
   console.log('[sendWelcomeEmail - Staff] STARTING email send', {
@@ -199,32 +209,75 @@ exports.createStaff = async (req, res) => {
       email,
       position,
       section,
-      adding_name,
-      adding_position,
       ip: req.ip
     });
 
+    // Validate name
+    if (!name || !validateName(name)) {
+      return res.status(400).json({ 
+        message: "Invalid name. Only letters, spaces, hyphens, and apostrophes are allowed." 
+      });
+    }
+
+    // Validate email
+    if (!email || !validateEmail(email)) {
+      return res.status(400).json({ 
+        message: "Invalid email format." 
+      });
+    }
+
+    // Check for duplicate email across ALL staff
+    const [existingStaff] = await db.query(
+      'SELECT id FROM staffs WHERE email = ?',
+      [email]
+    );
+    if (existingStaff.length > 0) {
+      return res.status(400).json({ 
+        message: "This email is already registered to another staff member." 
+      });
+    }
+
+    // Validate position
+    const validPositions = ["Adviser", "Guidance Staff", "Guidance Counselor", "Admin"];
+    if (!validPositions.includes(position)) {
+      return res.status(400).json({ 
+        message: "Invalid position. Must be one of: Adviser, Guidance Staff, Guidance Counselor, Admin" 
+      });
+    }
+
+    // Validate section for advisers
+    if (position === "Adviser") {
+      if (!section) {
+        return res.status(400).json({ 
+          message: "Section is required for advisers." 
+        });
+      }
+
+      // Check if section already has an adviser
+      const [existingAdviser] = await db.query(
+        'SELECT id, name FROM staffs WHERE section = ? AND position = "Adviser"',
+        [section]
+      );
+      if (existingAdviser.length > 0) {
+        return res.status(400).json({ 
+          message: `Section "${section}" already has an assigned adviser (${existingAdviser[0].name}).` 
+        });
+      }
+    }
+
     const newStaff = await staffService.createStaff(req.body);
     
-    // Insert activity log message
     let logMessage = `${adding_position}: ${adding_name} added a new ${newStaff.position}`;
     if (newStaff.position === "Adviser" && newStaff.section) {
       logMessage += ` of section ${newStaff.section}`;
     }
     logMessage += ` named ${newStaff.name}`;
     await db.query("INSERT INTO ActivityLog (message) VALUES (?)", [logMessage]);
-    
-    console.log('[createStaff] Activity logged', {
-      timestamp: new Date().toISOString(),
-      activityMessage: logMessage
-    });
 
-    // Send welcome email asynchronously
     sendWelcomeEmail(newStaff).catch(err => {
-      console.error('[createStaff] Email sending failed after staff creation', {
+      console.error('[createStaff] Email sending failed', {
         timestamp: new Date().toISOString(),
         staff_id: newStaff.id,
-        email: newStaff.email,
         error: err.message
       });
     });
@@ -232,10 +285,7 @@ exports.createStaff = async (req, res) => {
     console.log('[createStaff] Request successful', {
       timestamp: new Date().toISOString(),
       staff_id: newStaff.id,
-      name: newStaff.name,
       position: newStaff.position,
-      email: newStaff.email,
-      section: newStaff.section,
       duration: `${Date.now() - startTime}ms`
     });
 
@@ -246,11 +296,7 @@ exports.createStaff = async (req, res) => {
   } catch (error) {
     console.error('[createStaff] Request failed', {
       timestamp: new Date().toISOString(),
-      name: req.body.name,
-      email: req.body.email,
-      position: req.body.position,
       error: error.message,
-      stack: error.stack,
       duration: `${Date.now() - startTime}ms`
     });
     
@@ -258,6 +304,7 @@ exports.createStaff = async (req, res) => {
   }
 };
 
+// Update the updateStaff function
 exports.updateStaff = async (req, res) => {
   const startTime = Date.now();
   try {
@@ -268,19 +315,59 @@ exports.updateStaff = async (req, res) => {
       timestamp: new Date().toISOString(),
       staff_id: id,
       updates: { name, email, position, section },
-      updating_by: { adding_name, adding_position },
       ip: req.ip
     });
+
+    // Validate name if provided
+    if (name && !validateName(name)) {
+      return res.status(400).json({ 
+        message: "Invalid name. Only letters, spaces, hyphens, and apostrophes are allowed." 
+      });
+    }
+
+    // Validate email if provided
+    if (email) {
+      if (!validateEmail(email)) {
+        return res.status(400).json({ 
+          message: "Invalid email format." 
+        });
+      }
+
+      // Check for duplicate email (excluding current staff)
+      const [existingStaff] = await db.query(
+        'SELECT id FROM staffs WHERE email = ? AND id != ?',
+        [email, id]
+      );
+      if (existingStaff.length > 0) {
+        return res.status(400).json({ 
+          message: "This email is already registered to another staff member." 
+        });
+      }
+    }
+
+    // If updating position to Adviser, validate section
+    if (position === "Adviser") {
+      if (!section) {
+        return res.status(400).json({ 
+          message: "Section is required for advisers." 
+        });
+      }
+
+      // Check if section already has a different adviser
+      const [existingAdviser] = await db.query(
+        'SELECT id, name FROM staffs WHERE section = ? AND position = "Adviser" AND id != ?',
+        [section, id]
+      );
+      if (existingAdviser.length > 0) {
+        return res.status(400).json({ 
+          message: `Section "${section}" already has an assigned adviser (${existingAdviser[0].name}).` 
+        });
+      }
+    }
 
     const updated = await staffService.updateStaff(id, req.body);
     
     if (!updated) {
-      console.warn('[updateStaff] Staff not found', {
-        timestamp: new Date().toISOString(),
-        staff_id: id,
-        duration: `${Date.now() - startTime}ms`
-      });
-      
       return res.status(404).json({ message: "Staff not found" });
     }
 
@@ -291,16 +378,10 @@ exports.updateStaff = async (req, res) => {
     }
     logMessage += ` named ${updatedStaff.name}`;
     await db.query("INSERT INTO ActivityLog (message) VALUES (?)", [logMessage]);
-    
-    console.log('[updateStaff] Activity logged', {
-      timestamp: new Date().toISOString(),
-      activityMessage: logMessage
-    });
 
     console.log('[updateStaff] Request successful', {
       timestamp: new Date().toISOString(),
       staff_id: id,
-      updated_fields: Object.keys(req.body).filter(k => !k.startsWith('adding_')),
       duration: `${Date.now() - startTime}ms`
     });
 
@@ -310,13 +391,13 @@ exports.updateStaff = async (req, res) => {
       timestamp: new Date().toISOString(),
       staff_id: req.params.id,
       error: error.message,
-      stack: error.stack,
       duration: `${Date.now() - startTime}ms`
     });
     
     return res.status(500).json({ message: "Server error", error: error.message });
   }
 };
+
 
 exports.deleteStaff = async (req, res) => {
   const startTime = Date.now();
@@ -925,48 +1006,109 @@ exports.resetPassword = async (req, res) => {
   }
 };
 
-exports.bulkInsertAdvisers = async (req, res) => {
+exports.bulkInsertGuidanceStaff = async (req, res) => {
   const startTime = Date.now();
   try {
     const { staffs } = req.body;
     
-    console.log('[bulkInsertAdvisers] Bulk insert started', {
+    console.log('[bulkInsertGuidanceStaff] Bulk insert started', {
       timestamp: new Date().toISOString(),
       count: staffs?.length || 0,
       ip: req.ip
     });
 
     if (!Array.isArray(staffs) || staffs.length === 0) {
-      console.warn('[bulkInsertAdvisers] Validation failed - invalid data', {
-        timestamp: new Date().toISOString(),
-        isArray: Array.isArray(staffs),
-        count: staffs?.length || 0
+      return res.status(400).json({ 
+        message: "Invalid request. Provide an array of staff members." 
       });
-      
-      return res.status(400).json({ message: "Invalid request. Provide an array of advisers." });
     }
 
-    const result = await staffService.bulkInsertAdvisers(staffs);
-    
-    console.log('[bulkInsertAdvisers] Bulk insert completed', {
+    // Get all existing emails
+    const [existingEmails] = await db.query('SELECT email FROM staffs');
+    const existingEmailSet = new Set(
+      existingEmails.map(e => e.email.toLowerCase())
+    );
+
+    const errors = [];
+    const validStaffs = [];
+    const seenEmails = new Set();
+
+    staffs.forEach((staff, index) => {
+      const rowNumber = index + 1;
+      const rowErrors = [];
+
+      // Validate name
+      if (!staff.name || !validateName(staff.name)) {
+        rowErrors.push('Invalid name (only letters, spaces, hyphens, apostrophes allowed)');
+      }
+
+      // Validate email
+      if (!staff.email || !validateEmail(staff.email)) {
+        rowErrors.push('Invalid email format');
+      } else {
+        const emailLower = staff.email.toLowerCase();
+        if (existingEmailSet.has(emailLower)) {
+          rowErrors.push('Email already exists');
+        } else if (seenEmails.has(emailLower)) {
+          rowErrors.push('Duplicate email in upload');
+        } else {
+          seenEmails.add(emailLower);
+        }
+      }
+
+      // Validate position
+      if (!staff.position || !["Guidance Staff", "Guidance Counselor"].includes(staff.position)) {
+        rowErrors.push('Invalid position (must be Guidance Staff or Guidance Counselor)');
+      }
+
+      // Set default status
+      staff.status = "Active";
+
+      if (rowErrors.length > 0) {
+        errors.push(`Row ${rowNumber} (${staff.name}): ${rowErrors.join(', ')}`);
+      } else {
+        validStaffs.push(staff);
+      }
+    });
+
+    if (errors.length > 0 && validStaffs.length === 0) {
+      return res.status(400).json({
+        message: "Bulk upload validation failed",
+        errors: errors
+      });
+    }
+
+    let insertedCount = 0;
+    if (validStaffs.length > 0) {
+      // Use existing bulk insert service
+      const result = await staffService.bulkInsertAdvisers(validStaffs);
+      insertedCount = result.insertedCount;
+    }
+
+    console.log('[bulkInsertGuidanceStaff] Bulk insert completed', {
       timestamp: new Date().toISOString(),
       totalRequested: staffs.length,
-      insertedCount: result.insertedCount,
-      skippedCount: result.skippedCount,
-      successRate: `${((result.insertedCount / staffs.length) * 100).toFixed(2)}%`,
+      insertedCount,
+      errorCount: errors.length,
       duration: `${Date.now() - startTime}ms`
     });
+
+    const responseMessage = errors.length > 0
+      ? {
+          message: `${insertedCount} staff members inserted successfully. ${errors.length} rows had errors.`,
+          insertedCount,
+          errors
+        }
+      : {
+          message: `${insertedCount} staff members inserted successfully.`,
+          insertedCount
+        };
     
-    return res.status(200).json({
-      message: `${result.insertedCount} advisers inserted successfully.`,
-      skipped: result.skippedCount > 0 ? `${result.skippedCount} were skipped (already exist).` : "No duplicates found.",
-    });
+    return res.status(200).json(responseMessage);
   } catch (error) {
-    console.error('[bulkInsertAdvisers] Bulk insert failed', {
+    console.error('[bulkInsertGuidanceStaff] Bulk insert failed', {
       timestamp: new Date().toISOString(),
-      count: req.body.staffs?.length || 0,
       error: error.message,
-      stack: error.stack,
       duration: `${Date.now() - startTime}ms`
     });
     
