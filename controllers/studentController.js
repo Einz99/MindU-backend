@@ -446,6 +446,8 @@ exports.deleteStudent = async (req, res) => {
   }
 };
 
+// Replace the bulkInsertStudents function in studentController.js
+
 exports.bulkInsertStudents = async (req, res) => {
   const startTime = Date.now();
   try {
@@ -469,17 +471,22 @@ exports.bulkInsertStudents = async (req, res) => {
       existingEmails.map(e => e.email.toLowerCase())
     );
 
-    // Get all valid sections
+    // Get all valid sections with their advisers
     const [validSections] = await db.query(
-      'SELECT DISTINCT section FROM staffs WHERE position = "Adviser"'
+      'SELECT section, name as adviser FROM staffs WHERE position = "Adviser"'
     );
-    const validSectionSet = new Set(validSections.map(s => s.section));
+    const sectionAdviserMap = new Map();
+    validSections.forEach(s => {
+      sectionAdviserMap.set(s.section, s.adviser);
+    });
 
     const errors = [];
     const validStudents = [];
     const seenEmails = new Set();
 
-    students.forEach(async (student, index) => {
+    // Use for...of instead of forEach to properly handle async/await
+    for (let index = 0; index < students.length; index++) {
+      const student = students[index];
       const rowNumber = index + 1;
       const rowErrors = [];
 
@@ -510,29 +517,30 @@ exports.bulkInsertStudents = async (req, res) => {
       // Validate section
       if (!student.section) {
         rowErrors.push('Section is required');
-      } else if (!validSectionSet.has(student.section)) {
+      } else if (!sectionAdviserMap.has(student.section)) {
         rowErrors.push(`Section "${student.section}" does not exist`);
       } else {
         // Auto-fill adviser based on section
-        const [adviserResult] = await db.query(
-          'SELECT name FROM staffs WHERE section = ? AND position = "Adviser"',
-          [student.section]
-        );
-        if (adviserResult.length > 0) {
-          student.adviser = adviserResult[0].name;
-        }
+        student.adviser = sectionAdviserMap.get(student.section);
       }
 
       if (rowErrors.length > 0) {
-        errors.push(`Row ${rowNumber} (${student.firstName} ${student.lastName}): ${rowErrors.join(', ')}`);
+        errors.push(`Row ${rowNumber} (${student.firstName || ''} ${student.lastName || ''}): ${rowErrors.join(', ')}`);
       } else {
         validStudents.push(student);
       }
+    }
+
+    console.log('[bulkInsertStudents] Validation completed', {
+      timestamp: new Date().toISOString(),
+      totalRows: students.length,
+      validRows: validStudents.length,
+      errorRows: errors.length
     });
 
     if (errors.length > 0 && validStudents.length === 0) {
       return res.status(400).json({
-        message: "Bulk upload validation failed",
+        message: "Bulk upload validation failed. All rows have errors.",
         errors: errors
       });
     }
@@ -567,6 +575,7 @@ exports.bulkInsertStudents = async (req, res) => {
     console.error('[bulkInsertStudents] Bulk insert failed', {
       timestamp: new Date().toISOString(),
       error: error.message,
+      stack: error.stack,
       duration: `${Date.now() - startTime}ms`
     });
     
