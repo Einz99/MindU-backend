@@ -116,6 +116,16 @@ exports.getAllStudents = async (req, res) => {
   }
 };
 
+const validateName = (name) => {
+  const nameRegex = /^[a-zA-Z\s\-']+$/;
+  return nameRegex.test(name) && name.trim().length > 0;
+};
+
+const validateEmail = (email) => {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(email);
+};
+
 exports.getStudentById = async (req, res) => {
   const startTime = Date.now();
   try {
@@ -188,25 +198,61 @@ exports.createStudent = async (req, res) => {
       ip: req.ip
     });
 
+    // Validate first name
+    if (!firstName || !validateName(firstName)) {
+      return res.status(400).json({ 
+        message: "Invalid first name. Only letters, spaces, hyphens, and apostrophes are allowed." 
+      });
+    }
+
+    // Validate last name
+    if (!lastName || !validateName(lastName)) {
+      return res.status(400).json({ 
+        message: "Invalid last name. Only letters, spaces, hyphens, and apostrophes are allowed." 
+      });
+    }
+
+    // Validate email
+    if (!email || !validateEmail(email)) {
+      return res.status(400).json({ 
+        message: "Invalid email format." 
+      });
+    }
+
+    // Check for duplicate email
+    const [existingStudent] = await db.query(
+      'SELECT id FROM students WHERE email = ?',
+      [email]
+    );
+    if (existingStudent.length > 0) {
+      return res.status(400).json({ 
+        message: "This email is already registered to another student." 
+      });
+    }
+
+    // Validate section exists
+    const [adviserCheck] = await db.query(
+      'SELECT id FROM staffs WHERE section = ? AND position = "Adviser"',
+      [section]
+    );
+    if (adviserCheck.length === 0) {
+      return res.status(400).json({ 
+        message: `Section "${section}" does not exist or has no adviser assigned.` 
+      });
+    }
+
     const newStudent = await studentService.createStudent(req.body);
 
-    // Prepare the activity message
     const message = `${adding_position}: ${adding_name} added a student ${firstName} ${lastName}, section: ${section} advisory class of ${adviser}`;
-
-    // Insert message into ActivityLog
-    await db.query(
-      `INSERT INTO ActivityLog (message) VALUES (?)`,
-      [message]
-    );
+    await db.query(`INSERT INTO ActivityLog (message) VALUES (?)`, [message]);
     
     console.log('[createStudent] Activity logged', {
       timestamp: new Date().toISOString(),
       activityMessage: message
     });
 
-    // Send welcome email asynchronously
     sendWelcomeEmail(newStudent).catch(err => {
-      console.error('[createStudent] Email sending failed after student creation', {
+      console.error('[createStudent] Email sending failed', {
         timestamp: new Date().toISOString(),
         student_id: newStudent.id,
         email: newStudent.email,
@@ -217,10 +263,6 @@ exports.createStudent = async (req, res) => {
     console.log('[createStudent] Request successful', {
       timestamp: new Date().toISOString(),
       student_id: newStudent.id,
-      name: `${firstName} ${lastName}`,
-      email: newStudent.email,
-      section,
-      adviser,
       duration: `${Date.now() - startTime}ms`
     });
 
@@ -231,12 +273,7 @@ exports.createStudent = async (req, res) => {
   } catch (error) {
     console.error('[createStudent] Request failed', {
       timestamp: new Date().toISOString(),
-      firstName: req.body.firstName,
-      lastName: req.body.lastName,
-      email: req.body.email,
-      section: req.body.section,
       error: error.message,
-      stack: error.stack,
       duration: `${Date.now() - startTime}ms`
     });
     
@@ -421,58 +458,115 @@ exports.bulkInsertStudents = async (req, res) => {
     });
 
     if (!Array.isArray(students) || students.length === 0) {
-      console.warn('[bulkInsertStudents] Validation failed - invalid data', {
-        timestamp: new Date().toISOString(),
-        isArray: Array.isArray(students),
-        count: students?.length || 0
+      return res.status(400).json({ 
+        message: "Invalid request. Provide an array of students." 
       });
-      
-      return res.status(400).json({ message: "Invalid request. Provide an array of students." });
     }
 
-    // Sample data for logging (first few students)
-    const sampleStudents = students.slice(0, 3).map(s => ({
-      name: `${s.firstName} ${s.lastName}`,
-      section: s.section,
-      email: s.email
-    }));
+    // Get all existing emails
+    const [existingEmails] = await db.query('SELECT email FROM students');
+    const existingEmailSet = new Set(
+      existingEmails.map(e => e.email.toLowerCase())
+    );
 
-    console.log('[bulkInsertStudents] Sample data', {
-      timestamp: new Date().toISOString(),
-      totalCount: students.length,
-      samples: sampleStudents
+    // Get all valid sections
+    const [validSections] = await db.query(
+      'SELECT DISTINCT section FROM staffs WHERE position = "Adviser"'
+    );
+    const validSectionSet = new Set(validSections.map(s => s.section));
+
+    const errors = [];
+    const validStudents = [];
+    const seenEmails = new Set();
+
+    students.forEach(async (student, index) => {
+      const rowNumber = index + 1;
+      const rowErrors = [];
+
+      // Validate first name
+      if (!student.firstName || !validateName(student.firstName)) {
+        rowErrors.push('Invalid first name');
+      }
+
+      // Validate last name
+      if (!student.lastName || !validateName(student.lastName)) {
+        rowErrors.push('Invalid last name');
+      }
+
+      // Validate email
+      if (!student.email || !validateEmail(student.email)) {
+        rowErrors.push('Invalid email format');
+      } else {
+        const emailLower = student.email.toLowerCase();
+        if (existingEmailSet.has(emailLower)) {
+          rowErrors.push('Email already exists');
+        } else if (seenEmails.has(emailLower)) {
+          rowErrors.push('Duplicate email in upload');
+        } else {
+          seenEmails.add(emailLower);
+        }
+      }
+
+      // Validate section
+      if (!student.section) {
+        rowErrors.push('Section is required');
+      } else if (!validSectionSet.has(student.section)) {
+        rowErrors.push(`Section "${student.section}" does not exist`);
+      } else {
+        // Auto-fill adviser based on section
+        const [adviserResult] = await db.query(
+          'SELECT name FROM staffs WHERE section = ? AND position = "Adviser"',
+          [student.section]
+        );
+        if (adviserResult.length > 0) {
+          student.adviser = adviserResult[0].name;
+        }
+      }
+
+      if (rowErrors.length > 0) {
+        errors.push(`Row ${rowNumber} (${student.firstName} ${student.lastName}): ${rowErrors.join(', ')}`);
+      } else {
+        validStudents.push(student);
+      }
     });
 
-    const result = await studentService.bulkInsertStudents(students);
+    if (errors.length > 0 && validStudents.length === 0) {
+      return res.status(400).json({
+        message: "Bulk upload validation failed",
+        errors: errors
+      });
+    }
 
-    // Calculate section distribution
-    const sectionDistribution = students.reduce((acc, s) => {
-      acc[s.section] = (acc[s.section] || 0) + 1;
-      return acc;
-    }, {});
+    let insertedCount = 0;
+    if (validStudents.length > 0) {
+      const result = await studentService.bulkInsertStudents(validStudents);
+      insertedCount = result.insertedCount;
+    }
 
     console.log('[bulkInsertStudents] Bulk insert completed', {
       timestamp: new Date().toISOString(),
       totalRequested: students.length,
-      insertedCount: result.insertedCount,
-      skippedCount: result.skippedCount,
-      successRate: `${((result.insertedCount / students.length) * 100).toFixed(2)}%`,
-      sectionDistribution,
+      insertedCount,
+      errorCount: errors.length,
       duration: `${Date.now() - startTime}ms`
     });
 
-    return res.status(200).json({
-      message: `${result.insertedCount} students inserted successfully.`,
-      skipped: result.skippedCount > 0 
-        ? `${result.skippedCount} students were skipped because they already exist.` 
-        : "No duplicates found.",
-    });
+    const responseMessage = errors.length > 0
+      ? {
+          message: `${insertedCount} students inserted successfully. ${errors.length} rows had errors.`,
+          insertedCount,
+          errors
+        }
+      : {
+          message: `${insertedCount} students inserted successfully.`,
+          insertedCount
+        };
+
+    return res.status(200).json(responseMessage);
   } catch (error) {
     console.error('[bulkInsertStudents] Bulk insert failed', {
       timestamp: new Date().toISOString(),
-      count: req.body.students?.length || 0,
       error: error.message,
-      stack: error.stack,
       duration: `${Date.now() - startTime}ms`
     });
     
