@@ -1,7 +1,7 @@
 {
   "files": {
     "main.css": "/static/css/main.12d33e4e.css",
-    "main.js": "/static/js/main.b08206e2.js",
+    "main.js": "/static/js/main.daedcf89.js",
     "reactPlayerYouTube.js": "/static/js/reactPlayerYouTube.675f482a.chunk.js",
     "reactPlayerSoundCloud.js": "/static/js/reactPlayerSoundCloud.45b569c7.chunk.js",
     "reactPlayerVimeo.js": "/static/js/reactPlayerVimeo.a6ea565c.chunk.js",
@@ -39,7 +39,7 @@
     "static/media/roboto-greek-ext-400-normal.woff": "/static/media/roboto-greek-ext-400-normal.a0baf7d6726d8f751a27.woff",
     "index.html": "/index.html",
     "main.12d33e4e.css.map": "/static/css/main.12d33e4e.css.map",
-    "main.b08206e2.js.map": "/static/js/main.b08206e2.js.map",
+    "main.daedcf89.js.map": "/static/js/main.daedcf89.js.map",
     "reactPlayerYouTube.675f482a.chunk.js.map": "/static/js/reactPlayerYouTube.675f482a.chunk.js.map",
     "reactPlayerSoundCloud.45b569c7.chunk.js.map": "/static/js/reactPlayerSoundCloud.45b569c7.chunk.js.map",
     "reactPlayerVimeo.a6ea565c.chunk.js.map": "/static/js/reactPlayerVimeo.a6ea565c.chunk.js.map",
@@ -58,6 +58,6 @@
   },
   "entrypoints": [
     "static/css/main.12d33e4e.css",
-    "static/js/main.b08206e2.js"
+    "static/js/main.daedcf89.js"
   ]
 }

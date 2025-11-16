@@ -446,8 +446,6 @@ exports.deleteStudent = async (req, res) => {
   }
 };
 
-// Replace the bulkInsertStudents function in studentController.js
-
 exports.bulkInsertStudents = async (req, res) => {
   const startTime = Date.now();
   try {
