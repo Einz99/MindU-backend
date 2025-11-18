@@ -287,8 +287,6 @@ exports.resolveAllbyStudent = async (id) => {
 };
 
 exports.getArchivedChats = async () => {
-  console.log('[getArchivedChats Service] Starting to fetch archived chats');
-  
   try {
     const query = `
       SELECT 
@@ -310,28 +308,16 @@ exports.getArchivedChats = async () => {
       ORDER BY s.id, oc.created_at ASC;
     `;
     
-    console.log('[getArchivedChats Service] Executing query...');
     const [results] = await db.execute(query);
-    
-    console.log('[getArchivedChats Service] Query executed successfully, rows:', results.length);
     
     if (results.length === 0) {
       console.log('[getArchivedChats Service] No archived chats found');
       return [];
     }
-
-    // Log sample of first result for debugging
-    console.log('[getArchivedChats Service] Sample result:', {
-      student_id: results[0]?.student_id,
-      name: results[0]?.name,
-      messageCount: results.length
-    });
     
     return results;
     
   } catch (error) {
-    console.error('[getArchivedChats Service] Error fetching archived chats:', error);
-    console.error('[getArchivedChats Service] Error stack:', error.stack);
     throw new Error('Failed to fetch archived chat history: ' + error.message);
   }
 };
