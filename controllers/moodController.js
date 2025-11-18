@@ -69,7 +69,7 @@ exports.upsertMood = async (req, res) => {
       return res.status(400).json({ message: `Invalid mood. Valid options are: ${validMoods.join(', ')}` });
     }
 
-    const now = new Date();
+    const now = new Date.setHours(now.getHours() + 8); ;
     const today = now.toISOString().split('T')[0];
 
     const existing = await moodServices.getMoodByDate(student_id, today);
