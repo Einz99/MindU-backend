@@ -285,3 +285,26 @@ exports.resolveAllbyStudent = async (id) => {
   
   return rows.affectedRows;
 };
+
+exports.getArchivedChats = async () => {
+  const query = `
+    SELECT 
+        s.id AS student_id,
+        CONCAT(s.firstName, ' ', s.lastName) AS name,
+        oc.message AS lastMessage,
+        oc.created_at AS dateTime,
+        'completed' AS status,
+        oc.is_from_office AS sender,
+        oc.message AS text,
+        oc.created_at AS timestamp
+    FROM students s
+    JOIN office_chat oc ON s.id = oc.student_id
+    WHERE s.chatStatus = 'Completed' OR s.isAskingHelp = false
+    ORDER BY oc.created_at ASC;
+  `;
+  
+  const [results] = await db.execute(query);
+  
+  // Process results same as getStudentAFH
+  return processResults(results);
+};

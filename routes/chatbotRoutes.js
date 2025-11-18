@@ -8,6 +8,7 @@ router.get('/get-office-chat-history/:userId', chatbotController.getOfficeChatCo
 router.get('/get-conversation/:userId', chatbotController.getConversation);
 router.get('/students-asking-for-help', chatbotController.getStudentAFH)
 router.get('/alerts', chatbotController.getAlert);
+router.get('/archived-chats', chatbotController.getArchivedChats);
 router.post('/send-message', chatbotController.sendMessage);
 router.post('/insert-chat-message', chatbotController.insertChatMessage);
 router.post('/:id/alert', chatbotController.addAlert);

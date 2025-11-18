@@ -413,3 +413,13 @@ exports.resolveAll = async (req, res) => {
     });
   }
 };
+
+exports.getArchivedChats = async (req, res) => {
+  try {
+    const results = await chatbotService.getArchivedChats();
+    // Same format as getStudentAFH but for all chats
+    res.json({ archivedChats: results });
+  } catch (error) {
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
