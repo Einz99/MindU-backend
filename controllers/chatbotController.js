@@ -415,11 +415,58 @@ exports.resolveAll = async (req, res) => {
 };
 
 exports.getArchivedChats = async (req, res) => {
+  console.log('[getArchivedChats] Request received');
+  
   try {
     const results = await chatbotService.getArchivedChats();
-    // Same format as getStudentAFH but for all chats
-    res.json({ archivedChats: results });
+    console.log('[getArchivedChats] Raw results retrieved:', results?.length);
+
+    // Check if results is an array
+    if (!Array.isArray(results)) {
+      console.log('[getArchivedChats] Results is not an array');
+      return res.status(500).json({ message: 'Results should be an array' });
+    }
+
+    // Group messages by student
+    const archivedHistory = results.reduce((acc, curr) => {
+      const { student_id, name, lastMessage, dateTime, status, sender, text, timestamp } = curr;
+
+      if (!acc[student_id]) {
+        acc[student_id] = {
+          id: student_id,
+          name,
+          lastMessage,
+          dateTime,
+          status: 'completed',
+          messages: []
+        };
+      }
+
+      acc[student_id].messages.push({
+        sender: sender ? "agent" : "user",
+        text,
+        timestamp
+      });
+
+      // Update lastMessage if this is the most recent timestamp
+      if (new Date(timestamp) > new Date(acc[student_id].dateTime)) {
+        acc[student_id].lastMessage = text;
+        acc[student_id].dateTime = timestamp;
+      }
+
+      return acc;
+    }, {});
+
+    const response = Object.values(archivedHistory);
+    console.log('[getArchivedChats] Processed archived chats, count:', response.length);
+
+    res.json({ archivedChats: response });
+
   } catch (error) {
-    res.status(500).json({ message: 'Internal server error' });
+    console.error("[getArchivedChats] Error fetching archived chats:", error);
+    res.status(500).json({ 
+      message: 'Internal server error', 
+      error: error.message 
+    });
   }
 };

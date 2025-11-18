@@ -287,24 +287,51 @@ exports.resolveAllbyStudent = async (id) => {
 };
 
 exports.getArchivedChats = async () => {
-  const query = `
-    SELECT 
-        s.id AS student_id,
-        CONCAT(s.firstName, ' ', s.lastName) AS name,
-        oc.message AS lastMessage,
-        oc.created_at AS dateTime,
-        'completed' AS status,
-        oc.is_from_office AS sender,
-        oc.message AS text,
-        oc.created_at AS timestamp
-    FROM students s
-    JOIN office_chat oc ON s.id = oc.student_id
-    WHERE s.chatStatus = 'Completed' OR s.isAskingHelp = false
-    ORDER BY oc.created_at ASC;
-  `;
+  console.log('[getArchivedChats Service] Starting to fetch archived chats');
   
-  const [results] = await db.execute(query);
-  
-  // Process results same as getStudentAFH
-  return processResults(results);
+  try {
+    const query = `
+      SELECT 
+          s.id AS student_id,
+          CONCAT(s.firstName, ' ', s.lastName) AS name,
+          oc.message AS lastMessage,
+          oc.created_at AS dateTime,
+          s.chatStatus AS status,
+          oc.is_from_office AS sender,
+          oc.message AS text,
+          oc.created_at AS timestamp
+      FROM students s
+      JOIN office_chat oc ON s.id = oc.student_id
+      WHERE (s.chatStatus = 'Completed' OR s.isAskingHelp = false)
+        AND EXISTS (
+          SELECT 1 FROM office_chat 
+          WHERE student_id = s.id
+        )
+      ORDER BY s.id, oc.created_at ASC;
+    `;
+    
+    console.log('[getArchivedChats Service] Executing query...');
+    const [results] = await db.execute(query);
+    
+    console.log('[getArchivedChats Service] Query executed successfully, rows:', results.length);
+    
+    if (results.length === 0) {
+      console.log('[getArchivedChats Service] No archived chats found');
+      return [];
+    }
+
+    // Log sample of first result for debugging
+    console.log('[getArchivedChats Service] Sample result:', {
+      student_id: results[0]?.student_id,
+      name: results[0]?.name,
+      messageCount: results.length
+    });
+    
+    return results;
+    
+  } catch (error) {
+    console.error('[getArchivedChats Service] Error fetching archived chats:', error);
+    console.error('[getArchivedChats Service] Error stack:', error.stack);
+    throw new Error('Failed to fetch archived chat history: ' + error.message);
+  }
 };
