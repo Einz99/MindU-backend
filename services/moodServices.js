@@ -40,6 +40,36 @@ exports.updateMood = async (data) => {
   return result.affectedRows;
 };
 
+exports.createMood = async (data) => {
+  const query = `
+    INSERT INTO mood_data 
+      (student_id, emotion, emotion_dated, created_at, modified_at)
+    VALUES (?, ?, ?, DATE_ADD(NOW(), INTERVAL 8 HOUR), DATE_ADD(NOW(), INTERVAL 8 HOUR));
+  `
+  const params = [
+    data.id,
+    data.mood,
+    data.emotion_dated, // should be in 'YYYY-MM-DD' format
+  ]
+  const [result] = await db.query(query, params);
+  return {id: result.insertId, ...data}
+}
+
+exports.updateMood = async (data) => {
+  const query = `
+    UPDATE mood_data
+    SET emotion = ?, modified_at = DATE_ADD(NOW(), INTERVAL 8 HOUR)
+    WHERE student_id = ? AND emotion_dated = ?
+  `;
+  
+  const [result] = await db.query(query, [
+    data.mood, 
+    data.student_id, 
+    data.emotion_dated
+  ]);
+  return result.affectedRows;
+};
+
 exports.getMoodByDate = async (student_id, emotion_date) => {
   const [rows] = await db.query(
     `SELECT * FROM mood_data WHERE student_id = ? AND emotion_dated = ? LIMIT 1`,
@@ -51,7 +81,7 @@ exports.getMoodByDate = async (student_id, emotion_date) => {
 exports.updatePetCoinsAndStreak = async (student_id, coinsToAdd, streak) => {
   const query = `
     UPDATE pets
-    SET coins = coins + ?, streak = ?, updated_at = NOW()
+    SET coins = coins + ?, streak = ?, updated_at = DATE_ADD(NOW(), INTERVAL 8 HOUR)
     WHERE student_id = ?;
   `;
   
