@@ -30,8 +30,8 @@ exports.insertPet = async (studentId, petName, petType) => {
 // Function to insert the default toy (toy_1) for the newly created pet
 exports.insertDefaultToy = async (petId) => {
   const query = `
-    INSERT INTO pet_toys (pet_id, toy_type, is_active)
-    VALUES (?, 'toy_1', TRUE)
+    INSERT INTO pet_toys (pet_id, toy_type)
+    VALUES (?, 'toy_1')
   `;
 
   await db.query(query, [petId]);
